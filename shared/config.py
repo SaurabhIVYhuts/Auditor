@@ -12,5 +12,9 @@ class Settings(BaseSettings):
     app_name: str = "Konnective Tissue - Auditor Agent"
     api_prefix: str = "/api/v1"
 
+    # The real value comes from .env (never committed).
+    # This placeholder has no real password on purpose.
+    database_url: str = "postgresql+psycopg://auditor_app:change_me@localhost:5432/auditor_db"
+
 
 settings = Settings()
