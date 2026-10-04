@@ -48,9 +48,9 @@ pip install -r requirements.txt
 ### Phase 1 — Audit foundation
 
 - [x] Step 0: Project skeleton (folders, requirements, README)
-- [ ] Step 1: Scaffold audit package, `audit` schema and Alembic (AUD-001)
-- [ ] Step 2: Audit roles and permissions — AUD, AM, CO, OWN, MGT (AUD-002)
-- [ ] Step 3: Audit Data Hub tables + snapshot service (AUD-003)
+- [x] Step 1: Scaffold audit package, `audit` schema and Alembic (AUD-001)
+- [x] Step 2: Audit roles and permissions — AUD, AM, CO, OWN, MGT (AUD-002) — permission map done; API enforcement comes next
+- [x] Step 3: Audit Data Hub tables + snapshot service (AUD-003)
 - [ ] Step 4: Procurement event consumer, against mock events (AUD-004)
 - [ ] Step 5: Procurement trail builder (AUD-005)
 - [ ] Step 6: Frontend `/audit` shell (AUD-006)
