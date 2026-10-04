@@ -1,0 +1,9 @@
+fastapi>=0.115            # web framework for the REST API
+uvicorn[standard]>=0.30   # server that runs the FastAPI app
+sqlalchemy>=2.0           # ORM: Python classes <-> PostgreSQL tables
+alembic>=1.13             # database migrations (schema changes over time)
+psycopg[binary]>=3.2      # PostgreSQL driver used by SQLAlchemy
+pydantic>=2.7             # request/response validation (schemas)
+pydantic-settings>=2.3    # load configuration from environment / .env
+pytest>=8.0               # test runner
+httpx>=0.27               # HTTP client used by FastAPI's TestClient in tests

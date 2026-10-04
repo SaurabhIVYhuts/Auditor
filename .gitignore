@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets / local config
+.env
+
+# Tests & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local file storage (uploaded evidence etc.)
+storage/
+
+# Never commit PDFs (the internal architecture document must stay out of this public repo)
+*.pdf
