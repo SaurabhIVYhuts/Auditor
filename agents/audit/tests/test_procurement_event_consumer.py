@@ -89,3 +89,19 @@ def test_every_listed_procurement_event_is_processed(db_session):
     for event_type, entity_type in PROCUREMENT_EVENTS.items():
         result = handle_procurement_event(db_session, make_event(event_type, entity_type), READER)
         assert result.status == "processed", event_type
+
+
+def test_simultaneous_duplicate_is_reported_not_crashed(db_session, monkeypatch):
+    event = make_event()
+    first = handle_procurement_event(db_session, event, READER)  # "another worker" saves it
+    assert first.status == "processed"
+
+    # This worker's check ran before that save was visible (a real race condition).
+    monkeypatch.setattr(
+        "agents.audit.events.procurement_event_consumer._already_handled",
+        lambda db, event_id: False,
+    )
+    second = handle_procurement_event(db_session, event, READER)
+
+    assert second.status == "duplicate"
+    assert count_snapshots(db_session, event.entity.id) == 1  # the extra snapshot was undone

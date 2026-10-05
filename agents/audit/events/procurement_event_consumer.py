@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from agents.audit.events.envelope import EventEnvelope
@@ -20,11 +21,19 @@ from agents.audit.events.procurement_reader import PROCUREMENT_EVENTS, Procureme
 from agents.audit.models import AuditProcessedEvent
 from agents.audit.services.snapshot_service import capture_snapshot
 
+# Name of the UNIQUE constraint on audit_processed_events.event_id.
+EVENT_ID_UNIQUE_CONSTRAINT = "uq_audit_processed_events_event_id"
+
 
 @dataclass(frozen=True)
 class ConsumeResult:
     status: Literal["processed", "duplicate", "ignored"]
     source_record_id: uuid.UUID | None = None
+
+
+def _already_handled(db: Session, event_id: uuid.UUID) -> bool:
+    found = db.scalar(select(AuditProcessedEvent.id).where(AuditProcessedEvent.event_id == event_id))
+    return found is not None
 
 
 def handle_procurement_event(
@@ -34,10 +43,7 @@ def handle_procurement_event(
     if entity_type is None:
         return ConsumeResult("ignored")
 
-    already_handled = db.scalar(
-        select(AuditProcessedEvent.id).where(AuditProcessedEvent.event_id == envelope.event_id)
-    )
-    if already_handled is not None:
+    if _already_handled(db, envelope.event_id):
         return ConsumeResult("duplicate")
 
     if envelope.entity.type != entity_type:
@@ -47,22 +53,31 @@ def handle_procurement_event(
 
     record = reader.get_record(envelope.tenant_id, entity_type, envelope.entity.id)
 
-    snapshot = capture_snapshot(
-        db,
-        tenant_id=envelope.tenant_id,
-        source_system="procurement",
-        entity_type=entity_type,
-        entity_id=envelope.entity.id,
-        data=record,
-    )
-    db.add(
-        AuditProcessedEvent(
-            tenant_id=envelope.tenant_id,
-            event_id=envelope.event_id,
-            event_type=envelope.event_type,
-            correlation_id=envelope.correlation_id,
-            source_record_id=snapshot.id,
-        )
-    )
-    db.flush()
+    try:
+        # Savepoint: if another worker saved this same event a moment ago, the UNIQUE
+        # event_id rejects ours. We then undo only this part and report "duplicate".
+        with db.begin_nested():
+            snapshot = capture_snapshot(
+                db,
+                tenant_id=envelope.tenant_id,
+                source_system="procurement",
+                entity_type=entity_type,
+                entity_id=envelope.entity.id,
+                data=record,
+            )
+            db.add(
+                AuditProcessedEvent(
+                    tenant_id=envelope.tenant_id,
+                    event_id=envelope.event_id,
+                    event_type=envelope.event_type,
+                    correlation_id=envelope.correlation_id,
+                    source_record_id=snapshot.id,
+                )
+            )
+            db.flush()
+    except IntegrityError as exc:
+        if EVENT_ID_UNIQUE_CONSTRAINT not in str(exc.orig):
+            raise  # a different database problem: never hide it
+        return ConsumeResult("duplicate")
+
     return ConsumeResult("processed", snapshot.id)
