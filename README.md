@@ -1,4 +1,5 @@
 # Konnective Tissue — AI Auditor Agent
+![CI](https://github.com/SaurabhIVYhuts/Auditor/actions/workflows/ci.yml/badge.svg)
 
 A continuous-audit assistant for hospitals.
 It checks transactions against configurable rules and statistical baselines, turns exceptions into risk-scored audit cases,
@@ -76,5 +77,5 @@ Needs PostgreSQL running, a `.env` with `ENVIRONMENT=development`, and the table
 - [x] Step 4: Procurement event consumer, against mock events (AUD-004)
 - [x] Step 5: Procurement trail builder (AUD-005)
 - [ ] Step 6: Frontend `/audit` shell (AUD-006)
-- [ ] Step 7: CI pipeline
+- [x] Step 7: CI pipeline
 - [x] Exit check: procurement events land in the hub as snapshots
