@@ -52,7 +52,7 @@ pip install -r requirements.txt
 - [x] Step 2: Audit roles and permissions — AUD, AM, CO, OWN, MGT (AUD-002) — permission map + API enforcement (401/403) done
 - [x] Step 3: Audit Data Hub tables + snapshot service (AUD-003)
 - [x] Step 4: Procurement event consumer, against mock events (AUD-004)
-- [ ] Step 5: Procurement trail builder (AUD-005)
+- [x] Step 5: Procurement trail builder (AUD-005)
 - [ ] Step 6: Frontend `/audit` shell (AUD-006)
 - [ ] Step 7: CI pipeline
 - [ ] Exit check: procurement events land in the hub as snapshots
