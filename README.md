@@ -43,6 +43,28 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Demo (development only)
+
+Needs PostgreSQL running, a `.env` with `ENVIRONMENT=development`, and the tables created (`.venv\Scripts\python -m alembic upgrade head`).
+
+1. Load mock procurement events (PO → GRN → invoice → payment) into the Audit Data Hub:
+
+   ```powershell
+   .venv\Scripts\python -m scripts.seed_mock_procurement_events
+   ```
+
+   The first run prints `processed` for each event. Running it again prints `duplicate` and adds nothing.
+
+2. Start the server: `.venv\Scripts\python -m uvicorn agents.audit.main:app --reload`
+3. Open http://127.0.0.1:8000/docs, choose `GET /api/v1/audit/trail/po/{po_number}`, click "Try it out", and use:
+   - `po_number`: `PO-MOCK-00001`
+   - `X-User-Id`: any UUID
+   - `X-Tenant-Id`: `22222222-2222-2222-2222-222222222222`
+   - `X-Roles`: `AUD`
+
+   The response is the PO chain in procure-to-pay order, with `checksum_ok` on each entry.
+   The same trail is at http://127.0.0.1:8000/api/v1/audit/trail/po/PO-MOCK-00001, but a plain browser visit returns 401 because it can't send the headers.
+
 ## Build progress
 
 ### Phase 1 — Audit foundation
@@ -55,4 +77,4 @@ pip install -r requirements.txt
 - [x] Step 5: Procurement trail builder (AUD-005)
 - [ ] Step 6: Frontend `/audit` shell (AUD-006)
 - [ ] Step 7: CI pipeline
-- [ ] Exit check: procurement events land in the hub as snapshots
+- [x] Exit check: procurement events land in the hub as snapshots
