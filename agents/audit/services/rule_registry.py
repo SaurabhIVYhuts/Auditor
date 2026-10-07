@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from agents.audit.models import AuditConfig, AuditRule, AuditRuleVersion, RuleDomain, Severity
+from agents.audit.rules.validator import ensure_valid
 
 
 class ConfigMissingError(LookupError):
@@ -23,6 +24,7 @@ def create_rule(
     description: str | None = None,
 ) -> AuditRule:
     """Create a rule as DRAFT, version 1, and record version 1 in the history."""
+    ensure_valid(definition)   # invalid rules are never saved, not even as drafts
     RuleDomain(domain)   # raises ValueError for an unknown domain
     Severity(severity)   # raises ValueError for an unknown severity
     rule = AuditRule(
@@ -45,6 +47,7 @@ def save_new_version(
     changed_by: uuid.UUID | None = None, change_note: str | None = None,
 ) -> AuditRule:
     """Every edit becomes a new version; older versions stay exactly as they were."""
+    ensure_valid(definition)
     severity = severity or rule.severity
     Severity(severity)
     new_version = rule.current_version + 1

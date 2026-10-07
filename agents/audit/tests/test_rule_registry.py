@@ -4,13 +4,18 @@ import uuid
 import pytest
 
 from agents.audit.models import AuditRule
+from agents.audit.rules.validator import RuleValidationError
 from agents.audit.services.rule_registry import (
     ConfigMissingError, create_rule, get_config_value, get_rule_version,
     save_new_version, set_config_value,
 )
 
-V1 = {"condition": {"field": "po.grand_total", "op": ">", "value_ref": "config.po_high_value_limit"}}
-V2 = {"condition": {"field": "po.grand_total", "op": ">=", "value_ref": "config.po_high_value_limit"}}
+V1 = {
+    "trigger": {"type": "EVENT", "events": ["procurement.po.issued"]},
+    "condition": {"field": "po.grand_total", "op": ">", "value_ref": "config.po_high_value_limit"},
+    "action": {"type": "CREATE_EXCEPTION"},
+}
+V2 = {**V1, "condition": {"field": "po.grand_total", "op": ">=", "value_ref": "config.po_high_value_limit"}}
 
 
 def new_rule(db, **overrides):
@@ -62,3 +67,13 @@ def test_config_is_per_hospital(db_session):
     set_config_value(db_session, tenant_id=uuid.uuid4(), key="po_high_value_limit", value=1)
     with pytest.raises(ConfigMissingError):
         get_config_value(db_session, uuid.uuid4(), "po_high_value_limit")
+
+
+def test_invalid_definition_is_never_saved(db_session):
+    bad = {**V1, "condition": {"field": "po.secret_salary", "op": ">", "value": 1}}
+    with pytest.raises(RuleValidationError):
+        new_rule(db_session, definition=bad)
+    rule = new_rule(db_session)
+    with pytest.raises(RuleValidationError):
+        save_new_version(db_session, rule, definition=bad)
+    assert rule.current_version == 1
