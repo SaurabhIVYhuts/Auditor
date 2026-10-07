@@ -5,12 +5,13 @@ Thresholds come from audit_config, never from code. Does NOT commit: the caller 
 """
 import copy
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from agents.audit.models import AuditConfig, AuditRule, AuditRuleVersion, RuleDomain, Severity
+from agents.audit.models import AuditConfig, AuditRule, AuditRuleVersion, RuleDomain, RuleStatus, Severity
 from agents.audit.rules.validator import ensure_valid
 
 
@@ -60,6 +61,9 @@ def save_new_version(
     rule.definition = copy.deepcopy(definition)
     rule.severity = severity
     rule.updated_by = changed_by
+    rule.status = RuleStatus.DRAFT.value         # any change must be activated (approved) again
+    rule.approved_by = None
+    rule.approved_at = None
     db.flush()
     return rule
 
@@ -104,3 +108,30 @@ def get_config_value(db: Session, tenant_id: uuid.UUID, key: str) -> Any:
     if row is None:
         raise ConfigMissingError(f"Config value {key!r} is not set for this hospital")
     return row.value
+
+
+class MakerCheckerError(PermissionError):
+    """The person who wrote or changed a HIGH/CRITICAL rule cannot also approve it."""
+
+
+NEEDS_SECOND_PERSON = frozenset({"HIGH", "CRITICAL"})
+
+
+def activate_rule(db: Session, rule: AuditRule, *, approved_by: uuid.UUID) -> AuditRule:
+    """Make a rule ACTIVE. HIGH/CRITICAL rules need someone other than their author (maker-checker)."""
+    ensure_valid(rule.definition)
+    makers = {rule.created_by, rule.owner_id, rule.updated_by} - {None}
+    if rule.severity in NEEDS_SECOND_PERSON and approved_by in makers:
+        raise MakerCheckerError("MAKER_CHECKER: the author of a HIGH/CRITICAL rule cannot approve it")
+    rule.status = RuleStatus.ACTIVE.value
+    rule.approved_by = approved_by
+    rule.approved_at = datetime.now(timezone.utc)
+    db.flush()
+    return rule
+
+
+def deactivate_rule(db: Session, rule: AuditRule) -> AuditRule:
+    """Stop a rule from running. Its versions, runs and exceptions are all kept."""
+    rule.status = RuleStatus.INACTIVE.value
+    db.flush()
+    return rule
