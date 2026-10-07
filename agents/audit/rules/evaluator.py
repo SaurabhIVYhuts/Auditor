@@ -148,10 +148,14 @@ def _evaluate(node: dict[str, Any], ctx: EvaluationContext, result: EvaluationRe
     elif left is _MISSING:
         outcome = None
     else:
-        right = (ctx.get_config(node["value_ref"].removeprefix("config."))
-                 if "value_ref" in node else node["value"])
+        if "value_field" in node:
+            right = _read_field(ctx, node["value_field"])     # compare two fields, e.g. invoice vs PO
+        elif "value_ref" in node:
+            right = ctx.get_config(node["value_ref"].removeprefix("config."))
+        else:
+            right = node["value"]
         try:
-            outcome = _compare(left, op, right)
+            outcome = None if right is _MISSING else _compare(left, op, right)
         except (TypeError, ValueError, re.error):
             outcome = None
 

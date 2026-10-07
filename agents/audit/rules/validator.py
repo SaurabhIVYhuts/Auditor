@@ -8,8 +8,8 @@ from typing import Any
 
 from agents.audit.rules import dsl_spec as spec
 
-COMPARISON_KEYS = frozenset({"field", "op", "value", "value_ref"})
-FUNCTION_KEYS = frozenset({"fn", "args", "op", "value", "value_ref"})
+COMPARISON_KEYS = frozenset({"field", "op", "value", "value_ref", "value_field"})
+FUNCTION_KEYS = frozenset({"fn", "args", "op", "value", "value_ref", "value_field"})
 
 
 class RuleValidationError(ValueError):
@@ -36,14 +36,20 @@ def _check_comparison(node: dict, path: str, errors: list[str]) -> None:
     if op not in spec.COMPARISON_OPS:
         errors.append(f"{path}: unknown operator {op!r}")
         return
-    has_value, has_ref = "value" in node, "value_ref" in node
+    sources = [k for k in ("value", "value_ref", "value_field") if k in node]
     if op == "exists":
-        if has_value or has_ref:
+        if sources:
             errors.append(f"{path}: 'exists' takes no value")
         return
-    if has_value == has_ref:
-        errors.append(f"{path}: give exactly one of 'value' or 'value_ref'")
+    if len(sources) != 1:
+        errors.append(f"{path}: give exactly one of 'value', 'value_ref' or 'value_field'")
         return
+    if sources[0] == "value_field":
+        if op not in ("=", "!=", ">", ">=", "<", "<="):
+            errors.append(f"{path}: 'value_field' only works with = != > >= < <=")
+        _check_field(node["value_field"], path, errors)
+        return
+    has_ref = sources[0] == "value_ref"
     if has_ref:
         ref = node["value_ref"]
         if not (isinstance(ref, str) and re.match(spec.CONFIG_REF_PATTERN, ref)):
@@ -101,7 +107,7 @@ def _check_function(node: dict, path: str, errors: list[str]) -> None:
         _check_arg(args[arg], kind, f"{path}.args.{arg}", errors)
     if fn_spec["returns"] == "number":
         _check_comparison(node, path, errors)        # e.g. days_between(...) > 30
-    elif {"op", "value", "value_ref"} & set(node):
+    elif {"op", "value", "value_ref", "value_field"} & set(node):
         errors.append(f"{path}: {name} is a yes/no check and takes no operator or value")
 
 
