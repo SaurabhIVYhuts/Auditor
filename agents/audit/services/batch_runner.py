@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
 from agents.audit.models import AuditRule, AuditRuleRun, AuditSourceRecord, RuleStatus, RunTrigger
@@ -51,7 +52,7 @@ def latest_snapshots(
             AuditSourceRecord.is_deleted.is_(False),
             AuditSourceRecord.captured_at >= since,
         )
-        .distinct(AuditSourceRecord.entity_id)                       # one row per record...
+        .ext(distinct_on(AuditSourceRecord.entity_id))                # one row per record...
         .order_by(AuditSourceRecord.entity_id, AuditSourceRecord.captured_at.desc())  # ...the newest
     ))
 
