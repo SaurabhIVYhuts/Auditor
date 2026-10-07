@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
+from agents.audit.events.procurement_reader import PROCUREMENT_EVENTS
 from agents.audit.models import AuditRule, AuditRuleRun, AuditSourceRecord, RuleStatus, RunTrigger
 from agents.audit.rules import dsl_spec as spec
 from agents.audit.services.rule_engine import run_rule
@@ -36,6 +37,13 @@ def entity_types_used(node: Any) -> set[str]:
                 found |= entity_types_used(value)
         return found
     return set()
+
+
+def primary_entity_types(definition: dict) -> set[str]:
+    """The document types a rule is ABOUT: from its trigger events, else from the fields it reads."""
+    events = definition.get("trigger", {}).get("events") or []
+    from_events = {PROCUREMENT_EVENTS[e] for e in events if e in PROCUREMENT_EVENTS}
+    return from_events or entity_types_used(definition["condition"])
 
 
 def latest_snapshots(
@@ -67,7 +75,7 @@ def run_rule_batch(
     as_of = as_of or datetime.now(timezone.utc)
     records = latest_snapshots(
         db, tenant_id=rule.tenant_id,
-        entity_types=entity_types_used(rule.definition["condition"]),
+        entity_types=primary_entity_types(rule.definition),
         since=as_of - timedelta(days=lookback_days),
     )
     return run_rule(db, rule, records, trigger_type=trigger_type)

@@ -28,10 +28,44 @@ CREATES_EXCEPTION = frozenset({"CREATE_EXCEPTION", "CREATE_CASE"})   # NOTIFY_ON
 MAX_WARNINGS_PER_RUN = 100
 
 
-def build_facts(record: AuditSourceRecord) -> dict[str, dict]:
-    """Facts for the evaluator, e.g. a purchase_order snapshot becomes {"po": {...}}."""
+def _latest_by_field(db: Session, tenant_id: uuid.UUID, entity_type: str, field: str, value) -> AuditSourceRecord | None:
+    """Latest snapshot of a related document in the same hospital, e.g. the PO with this po_number."""
+    return db.scalar(
+        select(AuditSourceRecord).where(
+            AuditSourceRecord.tenant_id == tenant_id,
+            AuditSourceRecord.source_system == "procurement",
+            AuditSourceRecord.entity_type == entity_type,
+            AuditSourceRecord.is_deleted.is_(False),
+            AuditSourceRecord.snapshot[field].astext == str(value),
+        ).order_by(AuditSourceRecord.captured_at.desc()).limit(1)
+    )
+
+
+def build_facts(db: Session, record: AuditSourceRecord) -> dict[str, dict]:
+    """Facts for the evaluator: the record itself plus its linked documents (latest versions).
+
+    GRN -> its PO. Invoice -> its PO and GRN. Payment -> its invoice, then that invoice's PO and GRN.
+    """
     prefix = PREFIX_FOR_ENTITY.get(record.entity_type)
-    return {prefix: record.snapshot} if prefix else {}
+    if prefix is None:
+        return {}
+    facts: dict[str, dict] = {prefix: record.snapshot}
+
+    def link(target: str, field: str, value) -> None:
+        if target in facts or value in (None, ""):
+            return
+        found = _latest_by_field(db, record.tenant_id, spec.ENTITY_TYPES[target], field, value)
+        if found is not None:
+            facts[target] = found.snapshot
+
+    if prefix == "payment":
+        link("invoice", "invoice_number", record.snapshot.get("invoice_number"))
+    po_number = record.snapshot.get("po_number") or facts.get("invoice", {}).get("po_number")
+    if prefix in ("grn", "invoice", "payment"):
+        link("po", "po_number", po_number)
+    if prefix in ("invoice", "payment"):
+        link("grn", "po_number", po_number)
+    return facts
 
 
 def in_department_scope(rule: AuditRule, record: AuditSourceRecord) -> bool:
@@ -43,7 +77,7 @@ def in_department_scope(rule: AuditRule, record: AuditSourceRecord) -> bool:
 
 def evaluate_rule_on_record(db: Session, rule: AuditRule, record: AuditSourceRecord) -> EvaluationResult:
     ctx = EvaluationContext(
-        facts=build_facts(record),
+        facts=build_facts(db, record),
         get_config=lambda key: get_config_value(db, rule.tenant_id, key),
         functions=make_db_functions(db, tenant_id=rule.tenant_id, current_entity_id=record.entity_id),
     )
