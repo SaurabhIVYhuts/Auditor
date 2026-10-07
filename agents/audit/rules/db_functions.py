@@ -44,14 +44,17 @@ def _other_latest(
         AuditSourceRecord.entity_id != current_entity_id,
         AuditSourceRecord.is_deleted.is_(False),
     )
-    # Quick pre-filter in PostgreSQL, then re-check each record's LATEST version in Python.
-    candidate_ids = select(AuditSourceRecord.entity_id).where(
-        *same_scope, AuditSourceRecord.snapshot.contains(wanted)
-    )
-    rows = db.scalars(
-        select(AuditSourceRecord).where(*same_scope, AuditSourceRecord.entity_id.in_(candidate_ids))
-    ).all()
     since = as_of - timedelta(days=window_days)
+    in_window = AuditSourceRecord.captured_at >= since   # safe: a record's latest version is its newest
+    # Pre-filter in PostgreSQL only on plain text values (e.g. vendor_id). Numbers, and numbers
+    # written as text, are compared in Python (_matches), so 150000 and "150000" count as equal.
+    text_only = {k: v for k, v in wanted.items() if isinstance(v, str) and _as_number(v) == v}
+    candidates = select(AuditSourceRecord.entity_id).where(*same_scope, in_window)
+    if text_only:
+        candidates = candidates.where(AuditSourceRecord.snapshot.contains(text_only))
+    rows = db.scalars(
+        select(AuditSourceRecord).where(*same_scope, in_window, AuditSourceRecord.entity_id.in_(candidates))
+    ).all()
     return [r for r in _latest_per_entity(rows)
             if r.captured_at >= since and _matches(r.snapshot, wanted)]
 

@@ -91,3 +91,10 @@ def test_missing_match_field_is_unknown_with_warning(db_session):
     current = save(db_session, tenant, "invoice", {"invoice_number": "INV-X", "amount": 1})
     result = check(db_session, tenant, current, "invoice", DUPLICATE_INVOICE)
     assert result.outcome is None and result.warnings
+
+
+def test_number_and_numeric_text_count_as_the_same_amount(db_session):
+    tenant, vendor = ids()
+    save(db_session, tenant, "invoice", invoice(vendor, "150000"))          # amount sent as text
+    current = save(db_session, tenant, "invoice", invoice(vendor, 150000))  # amount sent as a number
+    assert check(db_session, tenant, current, "invoice", DUPLICATE_INVOICE).matched is True
