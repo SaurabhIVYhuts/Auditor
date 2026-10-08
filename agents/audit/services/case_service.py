@@ -8,14 +8,14 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.orm import Session
 
 from agents.audit.cases.numbering import next_case_number
 from agents.audit.cases.state_machine import OPEN_STATUSES, CaseStatus, ensure_transition
 from agents.audit.models import (
-    AuditCase, AuditCaseComment, AuditCaseException, AuditException, CaseSource, ExceptionStatus,
-    RuleDomain, Severity,
+    AuditCase, AuditCaseComment, AuditCaseException, AuditException, CaseDomain, CaseSource,
+    ExceptionStatus, Severity,
 )
 from agents.audit.permissions import has_permission
 from shared.audit_log import AuditLog, list_for_entity, log_action
@@ -58,7 +58,7 @@ def open_case(
     exception_ids: Iterable[uuid.UUID] = (),
 ) -> AuditCase:
     """Open a new case (status OPEN) and link its exceptions, which become IN_CASE."""
-    RuleDomain(domain)       # each raises ValueError for an unknown value
+    CaseDomain(domain)       # each raises ValueError for an unknown value
     CaseSource(source)
     Severity(priority)
     exception_ids = list(dict.fromkeys(exception_ids))          # drop repeats, keep order
@@ -176,10 +176,18 @@ def get_case(db: Session, tenant_id: uuid.UUID, case_id: uuid.UUID) -> AuditCase
 
 def list_cases(
     db: Session, tenant_id: uuid.UUID, *, status: str | None = None, domain: str | None = None,
-    assigned_to: uuid.UUID | None = None, open_only: bool = False,
+    priority: str | None = None, assigned_to: uuid.UUID | None = None, open_only: bool = False,
+    visibility: ColumnElement[bool] | None = None,
 ) -> list[AuditCase]:
-    """This hospital's cases, newest first, with optional filters."""
+    """This hospital's cases, newest first, with optional filters.
+
+    visibility: an extra condition limiting which cases the caller may see (built by the API).
+    """
     stmt = select(AuditCase).where(AuditCase.tenant_id == tenant_id, AuditCase.is_deleted.is_(False))
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+    if priority:
+        stmt = stmt.where(AuditCase.priority == priority)
     if status:
         stmt = stmt.where(AuditCase.status == status)
     if domain:
@@ -190,6 +198,16 @@ def list_cases(
         stmt = stmt.where(AuditCase.status.in_(sorted(OPEN_STATUSES)))
     # opened_at can tie inside one transaction; the case number breaks the tie (same year).
     return list(db.scalars(stmt.order_by(AuditCase.opened_at.desc(), AuditCase.case_number.desc())))
+
+
+def case_comments(db: Session, case: AuditCase) -> list[AuditCaseComment]:
+    """The case's comments, oldest first."""
+    return list(db.scalars(
+        select(AuditCaseComment).where(
+            AuditCaseComment.case_id == case.id, AuditCaseComment.tenant_id == case.tenant_id,
+            AuditCaseComment.is_deleted.is_(False),
+        ).order_by(AuditCaseComment.created_at, AuditCaseComment.id)
+    ))
 
 
 def case_timeline(db: Session, case: AuditCase) -> list[AuditLog]:

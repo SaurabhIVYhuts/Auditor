@@ -27,9 +27,16 @@ def test_auditor_can_draft_and_submit_but_not_confirm_findings():
     assert not has_permission(["AUD"], "finding:confirm")
 
 
-def test_management_sees_summaries_not_case_details():
+def test_management_reads_only_high_risk_cases_and_cannot_change_them():
     assert has_permission(["MGT"], "dashboard:summary")
-    assert not has_permission(["MGT"], "case:read")
+    assert has_permission(["MGT"], "case:read_high_risk")
+    for permission in ("case:read_all", "case:read_assigned", "case:create", "case:update", "case:assign"):
+        assert not has_permission(["MGT"], permission)
+
+
+def test_only_audit_manager_creates_cases_and_sees_restricted_ones():
+    for permission in ("case:create", "case:read_all", "case:read_restricted"):
+        assert {r for r in ALL_ROLES if has_permission([r.value], permission)} == {AuditRole.AUDIT_MANAGER}
 
 
 def test_unknown_or_missing_roles_grant_nothing():

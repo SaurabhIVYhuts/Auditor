@@ -18,8 +18,13 @@ class AuditRole(StrEnum):
     ADMIN = "ADM"
 
 
+# Case visibility scopes (which cases "case:read" shows), used by the case API:
+#   case:read_assigned   - cases assigned to me            (Auditor)
+#   case:read_high_risk  - HIGH and CRITICAL cases         (Management)
+#   case:read_all        - every case of my hospital       (Audit Manager)
+#   case:read_restricted - also personnel-restricted cases (Audit Manager)
 AUDITOR = frozenset({
-    "case:read", "case:create", "case:update_status", "case:comment",
+    "case:read", "case:read_assigned", "case:update", "case:comment",
     "case:query_auditee", "case:close",
     "exception:read", "exception:create_case",
     "source_record:read",
@@ -34,7 +39,7 @@ AUDITOR = frozenset({
 })
 
 AUDIT_MANAGER = AUDITOR | frozenset({
-    "case:assign", "case:close_high_risk",
+    "case:create", "case:assign", "case:close_high_risk", "case:read_all", "case:read_restricted",
     "rule:write", "rule:activate", "rule:run",
     "evidence:export_pack", "evidence:supersede",
     "risk:configure", "risk:override", "risk:department_read",
@@ -61,6 +66,7 @@ AUDITEE = frozenset({
 })
 
 MANAGEMENT = frozenset({
+    "case:read", "case:read_high_risk",
     "dashboard:summary",
     "risk:department_read",
     "report:read",

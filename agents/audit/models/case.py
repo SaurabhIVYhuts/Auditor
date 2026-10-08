@@ -25,11 +25,15 @@ class CaseSource(StrEnum):
     MANUAL = "MANUAL"
 
 
+# Every rule domain, plus OTHER for manual cases that fit no rule domain (architecture 4.1).
+CaseDomain = StrEnum("CaseDomain", {**{d.name: d.value for d in RuleDomain}, "OTHER": "OTHER"})
+
+
 class AuditCase(CommonColumns, AuditBase):
     __tablename__ = "audit_cases"
     __table_args__ = (
         UniqueConstraint("tenant_id", "case_number"),           # unique per hospital
-        CheckConstraint(_allowed("domain", RuleDomain), name="domain"),
+        CheckConstraint(_allowed("domain", CaseDomain), name="domain"),
         CheckConstraint(_allowed("source", CaseSource), name="source"),
         CheckConstraint(_allowed("status", CaseStatus), name="status"),
         CheckConstraint(_allowed("priority", Severity), name="priority"),
