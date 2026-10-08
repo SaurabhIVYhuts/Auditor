@@ -29,7 +29,7 @@ AUDITOR = frozenset({
     "exception:read", "exception:create_case",
     "source_record:read",
     "rule:read",
-    "evidence:upload", "evidence:read", "evidence:verify",
+    "evidence:write", "evidence:read", "evidence:verify", "evidence:supersede",
     "risk:read",
     "anomaly:read", "anomaly:feedback",
     "finding:read", "finding:create", "finding:submit",
@@ -41,7 +41,7 @@ AUDITOR = frozenset({
 AUDIT_MANAGER = AUDITOR | frozenset({
     "case:create", "case:assign", "case:close_high_risk", "case:read_all", "case:read_restricted",
     "rule:write", "rule:activate", "rule:run",
-    "evidence:export_pack", "evidence:supersede",
+    "evidence:export_pack",
     "risk:configure", "risk:override", "risk:department_read",
     "anomaly:suppress",
     "finding:confirm", "finding:dismiss",
@@ -54,7 +54,7 @@ COMPLIANCE_OFFICER = frozenset({
     "rule:read", "rule:write",
     "policy:read", "policy:write",
     "compliance:run", "compliance:read",
-    "evidence:upload", "evidence:read",
+    "evidence:write", "evidence:read",
     "dashboard:summary",
 })
 
@@ -66,7 +66,7 @@ AUDITEE = frozenset({
 })
 
 MANAGEMENT = frozenset({
-    "case:read", "case:read_high_risk",
+    "case:read", "case:read_high_risk", "evidence:read",
     "dashboard:summary",
     "risk:department_read",
     "report:read",
