@@ -3,7 +3,7 @@ import uuid
 from datetime import timedelta
 
 from agents.audit.events.procurement_event_consumer import handle_procurement_event
-from agents.audit.services.case_grouping_service import case_for_new_exception
+from agents.audit.services.case_grouping_service import backfill_cases, case_for_new_exception
 from agents.audit.services.case_service import _now, case_exceptions, list_cases
 from agents.audit.services.exception_service import record_rule_exception
 from agents.audit.services.rule_registry import create_rule, save_new_version
@@ -21,12 +21,18 @@ def snapshot_for(db, tenant, entity_id, data=None):
                             entity_id=entity_id, data=data or {"po_number": "PO-G1", "grand_total": 200000})
 
 
-def flag(db, rule, entity_id):
-    """Record a NEW exception for this rule version on this record, then group it."""
+def old_exception(db, rule, entity_id):
+    """A NEW exception that was never grouped (like those made before grouping existed)."""
     snap = snapshot_for(db, rule.tenant_id, entity_id)
     exception, created = record_rule_exception(db, rule=rule, entity_type="purchase_order", entity_id=entity_id,
                                                source_record_id=snap.id, details={})
     assert created
+    return exception
+
+
+def flag(db, rule, entity_id):
+    """Record a NEW exception for this rule version on this record, then group it."""
+    exception = old_exception(db, rule, entity_id)
     return exception, case_for_new_exception(db, exception, rule)
 
 
@@ -98,3 +104,29 @@ def test_notify_only_rule_opens_no_case(db_session):
     add_rule(db_session, tenant, definition={**PRC_APR_01, "action": {"type": "NOTIFY_ONLY"}})
     handle_procurement_event(db_session, make_event(tenant), PoReader())
     assert list_cases(db_session, tenant) == []
+
+
+# --- Backfill: exceptions made before grouping existed ---
+
+def test_backfill_groups_old_exceptions_then_finds_nothing(db_session):
+    tenant, po = uuid.uuid4(), uuid.uuid4()
+    rule = rule_for(db_session, tenant)
+    old_exception(db_session, rule, po)
+    save_new_version(db_session, rule, definition=PRC_APR_01)
+    old_exception(db_session, rule, po)                      # same rule + record -> joins the first case
+    old_exception(db_session, rule, uuid.uuid4())            # other record -> its own case
+
+    first = backfill_cases(db_session, tenant)
+    assert first == {"exceptions": 3, "cases_created": 2, "joined": 1, "skipped": 0}
+    assert len(list_cases(db_session, tenant)) == 2
+
+    second = backfill_cases(db_session, tenant)
+    assert second == {"exceptions": 0, "cases_created": 0, "joined": 0, "skipped": 0}
+
+
+def test_backfill_leaves_other_hospitals_alone(db_session):
+    mine, other = uuid.uuid4(), uuid.uuid4()
+    old_exception(db_session, rule_for(db_session, mine), uuid.uuid4())
+    theirs = old_exception(db_session, rule_for(db_session, other), uuid.uuid4())
+    backfill_cases(db_session, mine)
+    assert theirs.status == "NEW" and list_cases(db_session, other) == []

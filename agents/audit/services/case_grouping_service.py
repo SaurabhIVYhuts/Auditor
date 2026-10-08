@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from agents.audit.cases.state_machine import CaseStatus
 from agents.audit.models import (
     AuditCase, AuditCaseException, AuditException, AuditRule, AuditSourceRecord, CaseSource,
+    ExceptionStatus,
 )
 from agents.audit.services.case_service import _now, add_exception_to_case, open_case
 from agents.audit.services.rule_registry import ConfigMissingError, get_config_value
@@ -73,3 +74,26 @@ def case_for_new_exception(db: Session, exception: AuditException, rule: AuditRu
         exception_ids=[exception.id],
     )
     return case, True
+
+
+def backfill_cases(db: Session, tenant_id: uuid.UUID) -> dict[str, int]:
+    """Put this hospital's NEW rule exceptions (made before grouping existed) into cases, oldest first.
+
+    Exceptions without a rule (anomaly models, later) are skipped and counted. Safe to run again:
+    grouped exceptions become IN_CASE, so a second run finds nothing to do.
+    """
+    new_exceptions = db.scalars(select(AuditException).where(
+        AuditException.tenant_id == tenant_id,
+        AuditException.status == ExceptionStatus.NEW.value,
+        AuditException.is_deleted.is_(False),
+    ).order_by(AuditException.created_at, AuditException.id)).all()
+
+    counts = {"exceptions": 0, "cases_created": 0, "joined": 0, "skipped": 0}
+    for exception in new_exceptions:
+        if exception.rule_id is None:
+            counts["skipped"] += 1
+            continue
+        _, created = case_for_new_exception(db, exception, db.get(AuditRule, exception.rule_id))
+        counts["exceptions"] += 1
+        counts["cases_created" if created else "joined"] += 1
+    return counts
