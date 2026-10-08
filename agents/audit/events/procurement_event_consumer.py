@@ -2,7 +2,7 @@
 
 Turns a procurement event into a snapshot in the Audit Data Hub:
 event -> check type -> skip if already handled -> fetch full record (read-only)
--> save snapshot with checksum -> remember the event as handled.
+-> save snapshot with checksum -> remember the event as handled -> run ACTIVE rules.
 
 Does NOT commit: the caller commits, so the snapshot and the "handled" mark
 are saved together or not at all. If fetching fails, the error is raised and
@@ -20,6 +20,7 @@ from agents.audit.events.envelope import EventEnvelope
 from agents.audit.events.procurement_reader import PROCUREMENT_EVENTS, ProcurementReader
 from agents.audit.models import AuditProcessedEvent
 from agents.audit.services.snapshot_service import capture_snapshot
+from agents.audit.services.rule_engine import run_rules_for_event
 
 # Name of the UNIQUE constraint on audit_processed_events.event_id.
 EVENT_ID_UNIQUE_CONSTRAINT = "uq_audit_processed_events_event_id"
@@ -29,6 +30,7 @@ EVENT_ID_UNIQUE_CONSTRAINT = "uq_audit_processed_events_event_id"
 class ConsumeResult:
     status: Literal["processed", "duplicate", "ignored"]
     source_record_id: uuid.UUID | None = None
+    exceptions_created: int = 0
 
 
 def _already_handled(db: Session, event_id: uuid.UUID) -> bool:
@@ -80,4 +82,10 @@ def handle_procurement_event(
             raise  # a different database problem: never hide it
         return ConsumeResult("duplicate")
 
-    return ConsumeResult("processed", snapshot.id)
+    # Run every ACTIVE rule that listens to this event, in the same transaction as the snapshot.
+    runs = run_rules_for_event(
+        db, tenant_id=envelope.tenant_id, event_type=envelope.event_type, record=snapshot
+    )
+    return ConsumeResult(
+        "processed", snapshot.id, exceptions_created=sum(r.exceptions_created for r in runs)
+    )
