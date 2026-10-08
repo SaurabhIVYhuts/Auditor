@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { DEV_USER_ID, apiGet } from "@/lib/api";
+import { label, personLabel } from "@/lib/format";
 import { useDevRole } from "@/components/DevRole";
 import { CaseStatusBadge, SeverityBadge } from "@/components/RuleBadges";
 
@@ -33,10 +34,6 @@ function errorMessage(status: number): string {
   if (status === 401) return "You are not signed in.";
   if (status === 403) return "Your role is not allowed to view cases.";
   return `Could not load cases (HTTP ${status}).`;
-}
-
-function label(value: string): string {
-  return value.charAt(0) + value.slice(1).toLowerCase().replaceAll("_", " ");
 }
 
 function Select({ name, value, options, onChange }: {
@@ -125,9 +122,7 @@ export default function CasesPage() {
                   <td>{label(c.domain)}</td>
                   <td><SeverityBadge severity={c.priority} /></td>
                   <td><CaseStatusBadge status={c.status} /></td>
-                  <td title={c.assigned_to ?? undefined}>
-                    {c.assigned_to === null ? "-" : c.assigned_to === DEV_USER_ID ? "Me" : `${c.assigned_to.slice(0, 8)}…`}
-                  </td>
+                  <td title={c.assigned_to ?? undefined}>{personLabel(c.assigned_to)}</td>
                   <td>
                     {opened.toLocaleDateString()} ({age} {age === 1 ? "day" : "days"})
                   </td>
