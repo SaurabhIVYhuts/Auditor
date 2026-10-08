@@ -6,7 +6,7 @@ const NAV: { label: string; href?: string }[] = [
   { label: "Overview", href: "/audit" },
   { label: "Procurement trail", href: "/audit/trail" },
   { label: "Cases" },
-  { label: "Rules" },
+  { label: "Rules", href: "/audit/rules" },
   { label: "Findings" },
   { label: "Reports" },
 ];
