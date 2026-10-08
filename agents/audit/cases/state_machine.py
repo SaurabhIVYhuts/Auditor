@@ -10,6 +10,8 @@ Pure Python: no database. The case service will call ensure_transition() before 
 """
 from enum import StrEnum
 
+from agents.audit.workflow import InvalidTransition, StateMachine  # noqa: F401  (InvalidTransition re-exported)
+
 
 class CaseStatus(StrEnum):
     OPEN = "OPEN"
@@ -42,29 +44,7 @@ TRANSITIONS: dict[CaseStatus, frozenset[CaseStatus]] = {
 OPEN_STATUSES: frozenset[CaseStatus] = frozenset(CaseStatus) - {CaseStatus.CLOSED}
 
 
-class InvalidTransition(Exception):
-    """A case was asked to move to a status that may not follow its current one."""
-
-    def __init__(self, current: str, target: str):
-        super().__init__(f"cannot move from {current} to {target}")
-        self.current = current
-        self.target = target
-
-
-def can_transition(current: str, target: str) -> bool:
-    """True if a case in `current` may move to `target`. Unknown statuses are never allowed."""
-    try:
-        return CaseStatus(target) in TRANSITIONS[CaseStatus(current)]
-    except ValueError:
-        return False
-
-
-def allowed_next(current: str) -> list[CaseStatus]:
-    """The statuses a case in `current` may move to, in a stable order (for buttons and messages)."""
-    return sorted(TRANSITIONS[CaseStatus(current)])
-
-
-def ensure_transition(current: str, target: str) -> None:
-    """Raise InvalidTransition unless the move is allowed."""
-    if not can_transition(current, target):
-        raise InvalidTransition(current, target)
+_MACHINE = StateMachine(CaseStatus, TRANSITIONS)
+can_transition = _MACHINE.can_transition        # may a case in `current` move to `target`?
+allowed_next = _MACHINE.allowed_next            # statuses a case may move to next, stable order
+ensure_transition = _MACHINE.ensure_transition  # raises InvalidTransition unless allowed

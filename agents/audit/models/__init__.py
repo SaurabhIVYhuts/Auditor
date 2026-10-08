@@ -12,6 +12,7 @@ from agents.audit.models.evidence import (
 from agents.audit.models.exception import (
     AuditException, AuditRuleRun, ExceptionSource, ExceptionStatus, RunStatus, RunTrigger,
 )
+from agents.audit.models.finding import AuditFinding
 from agents.audit.models.processed_event import AuditProcessedEvent
 from agents.audit.models.rule import (
     AuditConfig, AuditRule, AuditRuleVersion, RuleDomain, RuleStatus, Severity,
@@ -20,7 +21,7 @@ from agents.audit.models.source_record import AuditSourceRecord
 
 __all__ = [
     "AUDIT_SCHEMA", "AuditBase", "AuditCase", "AuditCaseComment", "AuditCaseCounter",
-    "AuditCaseException", "AuditConfig", "AuditEvidence", "AuditEvidenceLink", "AuditException",
+    "AuditCaseException", "AuditConfig", "AuditEvidence", "AuditEvidenceLink", "AuditException", "AuditFinding",
     "AuditProcessedEvent", "AuditRule", "AuditRuleRun", "AuditRuleVersion", "AuditSourceRecord",
     "CaseDomain", "CaseSource", "EvidenceSource", "EvidenceStatus", "EvidenceType", "ExceptionSource",
     "ExceptionStatus", "LinkTarget", "RuleDomain", "RuleStatus", "RunStatus", "RunTrigger", "Severity",
