@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from agents.audit.main import app
 from agents.audit.tests.test_rule_engine import PRC_APR_01
+from shared.audit_log import list_for_entity
 from shared.config import settings
 from shared.db import get_db
 
@@ -99,3 +100,26 @@ def test_compliance_officer_cannot_activate():
     rule = create()
     r = client.post(f"/api/v1/audit/rules/{rule['id']}/activate", headers=as_user("CO", APPROVER))
     assert r.status_code == 403
+
+
+def rule_log(db, rule):
+    return list_for_entity(db, HOSPITAL, "audit_rule", uuid.UUID(rule["id"]))
+
+
+def test_create_activate_run_are_written_to_the_audit_log(db_session):
+    rule = create(user=AUTHOR)
+    client.post(f"/api/v1/audit/rules/{rule['id']}/activate", headers=as_user("AM", APPROVER))
+    client.post(f"/api/v1/audit/rules/{rule['id']}/run", headers=as_user("AM", APPROVER))
+
+    log = rule_log(db_session, rule)
+    assert [row.action for row in log] == ["rule.created", "rule.activated", "rule.run"]
+    assert [row.actor_id for row in log] == [AUTHOR, APPROVER, APPROVER]
+    assert log[1].details["approved_by"] == str(APPROVER)
+    assert log[2].details["status"] == "SUCCEEDED"
+
+
+def test_refused_activation_writes_no_log(db_session):
+    rule = create(user=AUTHOR)
+    r = client.post(f"/api/v1/audit/rules/{rule['id']}/activate", headers=as_user("AM", AUTHOR))
+    assert r.status_code == 403
+    assert [row.action for row in rule_log(db_session, rule)] == ["rule.created"]

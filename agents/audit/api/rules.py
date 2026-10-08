@@ -2,6 +2,8 @@
 
 Every endpoint checks a permission and only sees the logged-in user's hospital.
 Invalid rule definitions are refused with every problem listed (422).
+Every successful change or run is written to the audit log in the same transaction;
+refused actions write nothing.
 """
 import uuid
 
@@ -19,10 +21,12 @@ from agents.audit.services.batch_runner import run_rule_batch
 from agents.audit.services.rule_registry import (
     MakerCheckerError, activate_rule, create_rule, deactivate_rule, save_new_version,
 )
+from shared.audit_log import log_action
 from shared.auth import CurrentUser
 from shared.db import get_db
 
 router = APIRouter(prefix="/audit", tags=["audit-rules"])
+RULE_ENTITY = "audit_rule"
 
 
 def _get_rule(db: Session, user: CurrentUser, rule_id: uuid.UUID) -> AuditRule:
@@ -35,6 +39,11 @@ def _get_rule(db: Session, user: CurrentUser, rule_id: uuid.UUID) -> AuditRule:
 def _invalid(err: Exception) -> HTTPException:
     errors = err.errors if isinstance(err, RuleValidationError) else [str(err)]
     return HTTPException(422, detail={"errors": errors})
+
+
+def _log(db: Session, user: CurrentUser, action: str, rule: AuditRule, **details) -> None:
+    """Audit-log a successful rule action. Call before commit, so both are saved together."""
+    log_action(db, user.tenant_id, user.user_id, action, RULE_ENTITY, rule.id, details)
 
 
 @router.get("/rules", response_model=list[RuleOut])
@@ -64,6 +73,7 @@ def create(
             description=body.description, domain=body.domain, severity=body.severity,
             definition=body.definition, owner_id=user.user_id,
         )
+        _log(db, user, "rule.created", rule, rule_code=rule.rule_code, version=1)
         db.commit()
     except ValueError as err:                      # includes RuleValidationError
         db.rollback()
@@ -94,6 +104,8 @@ def edit_rule(
     try:
         save_new_version(db, rule, definition=body.definition, severity=body.severity,
                          changed_by=user.user_id, change_note=body.change_note)
+        _log(db, user, "rule.version_saved", rule,
+             version=rule.current_version, change_note=body.change_note)
         db.commit()
     except ValueError as err:
         db.rollback()
@@ -107,6 +119,8 @@ def activate(rule_id: uuid.UUID, user: CurrentUser = Depends(require_permission(
     rule = _get_rule(db, user, rule_id)
     try:
         activate_rule(db, rule, approved_by=user.user_id)
+        _log(db, user, "rule.activated", rule,
+             version=rule.current_version, approved_by=str(rule.approved_by))
         db.commit()
     except MakerCheckerError:
         db.rollback()
@@ -122,6 +136,7 @@ def deactivate(rule_id: uuid.UUID, user: CurrentUser = Depends(require_permissio
                db: Session = Depends(get_db)):
     rule = _get_rule(db, user, rule_id)
     deactivate_rule(db, rule)
+    _log(db, user, "rule.deactivated", rule)
     db.commit()
     return rule
 
@@ -133,6 +148,8 @@ def run_now(rule_id: uuid.UUID, user: CurrentUser = Depends(require_permission("
     if rule.status != RuleStatus.ACTIVE.value:
         raise HTTPException(409, detail="Only ACTIVE rules can run")
     run = run_rule_batch(db, rule)
+    _log(db, user, "rule.run", rule, run_id=str(run.id), status=run.status,
+         records_checked=run.records_checked, exceptions_created=run.exceptions_created)
     db.commit()
     return run
 
