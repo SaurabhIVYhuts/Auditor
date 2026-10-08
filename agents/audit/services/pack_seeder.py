@@ -10,10 +10,10 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from agents.audit.models import AuditRule
+from agents.audit.models import AuditRule, RuleStatus
 from agents.audit.rules.procurement_pack import PACK
 from agents.audit.services.rule_registry import (
-    ConfigMissingError, create_rule, get_config_value, set_config_value,
+    ConfigMissingError, activate_rule, create_rule, get_config_value, set_config_value,
 )
 
 DEFAULT_PO_HIGH_VALUE_LIMIT = 100000   # starting value only; each hospital can change it in audit_config
@@ -46,3 +46,19 @@ def seed_procurement_pack(db: Session, tenant_id: uuid.UUID, created_by: uuid.UU
         )
         config_set = True
     return {"created": created, "skipped": skipped, "config_set": config_set}
+
+
+def activate_pack(db: Session, tenant_id: uuid.UUID, approved_by: uuid.UUID) -> int:
+    """Activate every pack rule of this hospital that is still DRAFT. Returns how many were activated.
+
+    Goes through activate_rule, so maker-checker applies: approved_by must not be the rules' author.
+    """
+    drafts = db.scalars(select(AuditRule).where(
+        AuditRule.tenant_id == tenant_id,
+        AuditRule.rule_code.in_(sorted(rule["rule_code"] for rule in PACK)),
+        AuditRule.status == RuleStatus.DRAFT.value,
+        AuditRule.is_deleted.is_(False),
+    ).order_by(AuditRule.rule_code)).all()
+    for rule in drafts:
+        activate_rule(db, rule, approved_by=approved_by)
+    return len(drafts)

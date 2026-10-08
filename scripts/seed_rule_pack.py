@@ -6,12 +6,7 @@ Development/test only. Safe to run again: existing rules are kept, ACTIVE rules 
 import sys
 import uuid
 
-from sqlalchemy import select
-
-from agents.audit.models import AuditRule, RuleStatus
-from agents.audit.rules.procurement_pack import PACK
-from agents.audit.services.pack_seeder import seed_procurement_pack
-from agents.audit.services.rule_registry import activate_rule
+from agents.audit.services.pack_seeder import activate_pack, seed_procurement_pack
 from shared.config import settings
 from shared.db import SessionLocal
 
@@ -26,18 +21,10 @@ def main() -> None:
         print("Refusing to seed rules: ENVIRONMENT is not development or test.")
         sys.exit(1)
 
-    pack_codes = {rule["rule_code"] for rule in PACK}
     db = SessionLocal()
     try:
         result = seed_procurement_pack(db, DEMO_TENANT_ID, created_by=AUTHOR_ID)
-        drafts = db.scalars(select(AuditRule).where(
-            AuditRule.tenant_id == DEMO_TENANT_ID,
-            AuditRule.rule_code.in_(sorted(pack_codes)),
-            AuditRule.status == RuleStatus.DRAFT.value,
-            AuditRule.is_deleted.is_(False),
-        ).order_by(AuditRule.rule_code)).all()
-        for rule in drafts:
-            activate_rule(db, rule, approved_by=APPROVER_ID)
+        activated = activate_pack(db, DEMO_TENANT_ID, approved_by=APPROVER_ID)
         db.commit()
     except Exception:
         db.rollback()
@@ -48,7 +35,7 @@ def main() -> None:
     print(f"created:    {result['created']}")
     print(f"skipped:    {result['skipped']}")
     print(f"config_set: {result['config_set']}")
-    print(f"activated:  {len(drafts)}")
+    print(f"activated:  {activated}")
     print(f"Demo tenant: {DEMO_TENANT_ID}")
 
 
