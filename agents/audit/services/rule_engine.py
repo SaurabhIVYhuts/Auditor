@@ -20,6 +20,7 @@ from agents.audit.rules.db_functions import make_db_functions
 from agents.audit.rules.evaluator import (
     EvaluationContext, EvaluationResult, RuleEvaluationError, evaluate_condition,
 )
+from agents.audit.services.case_grouping_service import case_for_new_exception
 from agents.audit.services.exception_service import record_rule_exception
 from agents.audit.services.rule_registry import ConfigMissingError, get_config_value
 
@@ -116,13 +117,14 @@ def run_rule(
                 result = evaluate_rule_on_record(db, rule, record)
                 warnings += [f"{record.entity_type} {record.entity_id}: {w}" for w in result.warnings]
                 if result.matched and rule.definition["action"]["type"] in CREATES_EXCEPTION:
-                    _, is_new = record_rule_exception(
+                    exception, is_new = record_rule_exception(
                         db, rule=rule, entity_type=record.entity_type, entity_id=record.entity_id,
                         source_record_id=record.id,
                         details={"checks": result.details, "warnings": result.warnings},
                     )
                     if is_new:
                         created += 1
+                        case_for_new_exception(db, exception, rule)   # same savepoint as the exception
                     else:
                         skipped += 1
     except (ConfigMissingError, RuleEvaluationError) as err:

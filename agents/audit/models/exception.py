@@ -51,7 +51,7 @@ class AuditException(CommonColumns, AuditBase):
     source_record_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("audit.audit_source_records.id"))
     details: Mapped[dict[str, Any]] = mapped_column(JSONB)      # the values that triggered it
     dedup_key: Mapped[str] = mapped_column(String(200), unique=True)
-    case_id: Mapped[uuid.UUID | None] = mapped_column(index=True)   # linked to audit_cases in Phase 3
+    # The case an exception belongs to is in audit_case_exceptions (the only source of truth).
     status: Mapped[str] = mapped_column(String(12), index=True, default=ExceptionStatus.NEW.value,
                                         server_default=ExceptionStatus.NEW.value)
 

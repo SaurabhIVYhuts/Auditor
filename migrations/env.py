@@ -8,8 +8,11 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
+import shared.audit_log  # noqa: F401  (registers the placeholder platform tables on SharedBase)
+import shared.notifications  # noqa: F401
 from agents.audit.models import AUDIT_SCHEMA, AuditBase
 from shared.config import settings
+from shared.models import SharedBase
 
 config = context.config
 if config.config_file_name is not None:
@@ -18,7 +21,8 @@ if config.config_file_name is not None:
 # '%' must be doubled for Alembic's config parser.
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
-target_metadata = AuditBase.metadata
+# Agent tables plus placeholder platform tables (shared/), both in the "audit" schema.
+target_metadata = [AuditBase.metadata, SharedBase.metadata]
 
 
 def include_name(name, type_, parent_names):

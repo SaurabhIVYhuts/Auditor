@@ -84,6 +84,23 @@ Same requirements as above. Then:
 3. Start the backend and the frontend (as above), open http://localhost:3000/audit/rules, and choose role **AM** in the sidebar.
 4. Open **PRC-APR-01** and look at **Run history**: it lists one EVENT run per demo PO event, and the run for PO-DEMO-1 shows 1 exception created.
 
+## Phase 3 demo (development only)
+
+After the Phase 2 demo:
+
+1. `.venv\Scripts\python -m scripts.run_phase3_demo`: puts every demo exception into a case (7 cases), then assigns the CRITICAL case and one HIGH case to the dev user and adds a comment to each. Safe to run again.
+2. Start the backend and the frontend, open http://localhost:3000/audit/cases, and choose role **AM**: all 7 cases are listed.
+3. The bell (top right) shows the 2 "assigned to you" notifications. Open the **CRITICAL** case.
+4. Try the actions: move the status forward, add a comment, and watch the timeline. Closing a HIGH/CRITICAL case needs **AM**.
+5. Switch to role **AUD**: only the 2 cases assigned to you are visible.
+
+## Known gaps
+
+- Role notifications (for example "critical case opened" for all Audit Managers) are one shared row: when one manager marks it read, it is read for every manager.
+- Closing a case does not yet check for open findings or corrective actions (comes in Phase 4).
+- Auditee queries and the AI case summary are P1 and not built yet.
+- Rule runs triggered by events or the nightly job are recorded in rule-run history but not in the audit log (only API actions are).
+
 ## Build progress
 
 ### Phase 1 — Audit foundation
@@ -108,3 +125,15 @@ Same requirements as above. Then:
 - [x] Rule library UI: list and detail pages with activate / deactivate / run now (AUD-015)
 - [x] Rule API with maker-checker activation (AUD-010)
 - [x] Exit check: rules produce exceptions from procurement events
+
+### Phase 3 — Audit cases
+
+- [x] Append-only audit log; rule changes and runs through the API are logged
+- [x] Case state machine (OPEN → … → CLOSED, REOPENED) with full transition tests (AUD-020)
+- [x] Case tables and case numbers AUD-YYYY-NNNNN per hospital and year, in hospital time (AUD-020)
+- [x] Case service: open, assign, status rules (reason for NO_ISSUE, Audit Manager for HIGH/CRITICAL close), comments, timeline (AUD-020)
+- [x] Exceptions open cases automatically, grouped by rule + record within a window; backfill for older exceptions (AUD-021)
+- [x] Case API with visibility rules (AM all, AUD own, MGT high-risk, restricted for AM only) and case actions
+- [x] Case queue and case workspace UI (AUD-022)
+- [x] In-app notifications: case assigned, critical case opened; notification bell (AUD-023)
+- [x] Exit check: exceptions become managed cases
