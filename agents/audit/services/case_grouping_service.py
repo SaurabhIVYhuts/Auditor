@@ -17,6 +17,7 @@ from agents.audit.models import (
     ExceptionStatus,
 )
 from agents.audit.services.case_service import _now, add_exception_to_case, open_case
+from agents.audit.services.evidence_service import capture_for_case
 from agents.audit.services.rule_registry import ConfigMissingError, get_config_value
 
 GROUPING_WINDOW_KEY = "case_grouping_window_days"
@@ -61,19 +62,21 @@ def _department_of(db: Session, exception: AuditException) -> uuid.UUID | None:
 
 
 def case_for_new_exception(db: Session, exception: AuditException, rule: AuditRule) -> tuple[AuditCase, bool]:
-    """Put a new rule exception into a case. Returns (case, created)."""
+    """Put a new rule exception into a case, with the record's snapshot as evidence. Returns (case, created)."""
     window = grouping_window_days(db, exception.tenant_id)
-    existing = _open_case_with_same_finding(db, exception, window)
-    if existing is not None:
-        add_exception_to_case(db, existing, exception, actor_id=None)
-        return existing, False
-    case = open_case(
-        db, exception.tenant_id, domain=rule.domain, title=rule.name, source=CaseSource.RULE.value,
-        primary_entity_type=exception.entity_type, primary_entity_id=exception.entity_id,
-        priority=rule.severity, actor_id=None, department_id=_department_of(db, exception),
-        exception_ids=[exception.id],
-    )
-    return case, True
+    case = _open_case_with_same_finding(db, exception, window)
+    created = case is None
+    if case is not None:
+        add_exception_to_case(db, case, exception, actor_id=None)
+    else:
+        case = open_case(
+            db, exception.tenant_id, domain=rule.domain, title=rule.name, source=CaseSource.RULE.value,
+            primary_entity_type=exception.entity_type, primary_entity_id=exception.entity_id,
+            priority=rule.severity, actor_id=None, department_id=_department_of(db, exception),
+            exception_ids=[exception.id],
+        )
+    capture_for_case(db, db.get(AuditSourceRecord, exception.source_record_id), case)
+    return case, created
 
 
 def backfill_cases(db: Session, tenant_id: uuid.UUID) -> dict[str, int]:
