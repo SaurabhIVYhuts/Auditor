@@ -75,6 +75,15 @@ Needs PostgreSQL running, a `.env` with `ENVIRONMENT=development`, and the table
 
    Then open http://localhost:3000/audit.
 
+## Phase 2 demo (development only)
+
+Same requirements as above. Then:
+
+1. `.venv\Scripts\python -m scripts.seed_rule_pack`: adds the 11 procurement rules to the demo hospital and activates them (author and approver are two different dev users).
+2. `.venv\Scripts\python -m scripts.run_phase2_demo`: sends demo procurement events. The first run creates 7 exceptions; running it again creates 0.
+3. Start the backend and the frontend (as above), open http://localhost:3000/audit/rules, and choose role **AM** in the sidebar.
+4. Open **PRC-APR-01** and look at **Run history**: it lists one EVENT run per demo PO event, and the run for PO-DEMO-1 shows 1 exception created.
+
 ## Build progress
 
 ### Phase 1 — Audit foundation
@@ -88,3 +97,14 @@ Needs PostgreSQL running, a `.env` with `ENVIRONMENT=development`, and the table
 - [x] Step 6: Frontend `/audit` shell (AUD-006)
 - [x] Step 7: CI pipeline
 - [x] Exit check: procurement events land in the hub as snapshots
+
+### Phase 2 — Rules engine
+
+- [x] Rule, rule version and config tables; rule registry with versioning (AUD-010)
+- [x] Rule DSL: whitelist, validator and evaluator with three-valued logic (AUD-011)
+- [x] Event-triggered and batch rule runs, with run history (AUD-012)
+- [x] Exceptions with dedup, so a rule never flags the same record twice (AUD-013)
+- [x] Procurement rule pack: 11 starter rules, seeded as DRAFT, with behaviour tests (AUD-014)
+- [x] Rule library UI: list and detail pages with activate / deactivate / run now (AUD-015)
+- [x] Rule API with maker-checker activation (AUD-010)
+- [x] Exit check: rules produce exceptions from procurement events
