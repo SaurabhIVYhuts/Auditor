@@ -79,13 +79,29 @@ def open_case(
     )
     db.add(case)
     db.flush()
-    for exc in exceptions:
-        db.add(AuditCaseException(tenant_id=tenant_id, case_id=case.id, exception_id=exc.id,
-                                  created_by=actor_id))
-        exc.status = ExceptionStatus.IN_CASE.value
-    db.flush()
     _log(db, case, actor_id, "case.opened", case_number=case.case_number, exceptions=len(exceptions))
+    for exc in exceptions:
+        add_exception_to_case(db, case, exc, actor_id)
     return case
+
+
+def add_exception_to_case(
+    db: Session, case: AuditCase, exception: AuditException, actor_id: uuid.UUID | None,
+) -> AuditCaseException:
+    """Link a NEW exception of the same hospital to a case that is not CLOSED; it becomes IN_CASE."""
+    if case.status == CaseStatus.CLOSED.value:
+        raise CaseClosed(f"Case {case.case_number} is closed: reopen the case first")
+    if exception.tenant_id != case.tenant_id:
+        raise ValueError("The exception belongs to another hospital")
+    if exception.status != ExceptionStatus.NEW.value:
+        raise ValueError("Only NEW exceptions can be added to a case")
+    link = AuditCaseException(tenant_id=case.tenant_id, case_id=case.id, exception_id=exception.id,
+                              created_by=actor_id)
+    db.add(link)
+    exception.status = ExceptionStatus.IN_CASE.value
+    db.flush()
+    _log(db, case, actor_id, "case.exception_added", exception_id=str(exception.id))
+    return link
 
 
 def assign_case(db: Session, case: AuditCase, assignee_id: uuid.UUID, actor_id: uuid.UUID | None) -> AuditCase:

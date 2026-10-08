@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from agents.audit.models import AuditRule, RuleStatus
 from agents.audit.rules.procurement_pack import PACK
+from agents.audit.services.case_grouping_service import DEFAULT_GROUPING_WINDOW_DAYS, GROUPING_WINDOW_KEY
 from agents.audit.services.rule_registry import (
     ConfigMissingError, activate_rule, create_rule, get_config_value, set_config_value,
 )
@@ -45,6 +46,15 @@ def seed_procurement_pack(db: Session, tenant_id: uuid.UUID, created_by: uuid.UU
             changed_by=created_by,
         )
         config_set = True
+    # Case grouping window: quietly add the default if missing (config_set reports the PO limit only).
+    try:
+        get_config_value(db, tenant_id, GROUPING_WINDOW_KEY)
+    except ConfigMissingError:
+        set_config_value(
+            db, tenant_id=tenant_id, key=GROUPING_WINDOW_KEY, value=DEFAULT_GROUPING_WINDOW_DAYS,
+            description="Days within which repeat exceptions of one rule on one record join the same case",
+            changed_by=created_by,
+        )
     return {"created": created, "skipped": skipped, "config_set": config_set}
 
 
