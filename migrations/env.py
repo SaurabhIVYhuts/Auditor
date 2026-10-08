@@ -9,6 +9,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
 from agents.audit.models import AUDIT_SCHEMA, AuditBase
+from shared.audit_log import SharedBase
 from shared.config import settings
 
 config = context.config
@@ -18,7 +19,8 @@ if config.config_file_name is not None:
 # '%' must be doubled for Alembic's config parser.
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
-target_metadata = AuditBase.metadata
+# Agent tables plus placeholder platform tables (shared/), both in the "audit" schema.
+target_metadata = [AuditBase.metadata, SharedBase.metadata]
 
 
 def include_name(name, type_, parent_names):
