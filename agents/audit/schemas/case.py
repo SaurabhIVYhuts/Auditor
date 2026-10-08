@@ -57,6 +57,32 @@ class ManualCaseCreate(BaseModel):
     department_id: uuid.UUID | None = None
 
 
+class AssignIn(BaseModel):
+    assignee_id: uuid.UUID
+
+
+class StatusIn(BaseModel):
+    status: str
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class CloseIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class CommentIn(BaseModel):
+    body: str = Field(max_length=5000)
+
+
+class CaseUpdate(BaseModel):
+    """Only the fields sent are changed. Sending department_id: null clears the department."""
+
+    title: str | None = Field(default=None, min_length=3, max_length=200)
+    priority: str | None = None
+    is_restricted: bool | None = None
+    department_id: uuid.UUID | None = None
+
+
 class CommentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

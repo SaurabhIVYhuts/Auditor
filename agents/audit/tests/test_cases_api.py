@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from agents.audit.main import app
 from agents.audit.services.case_grouping_service import case_for_new_exception
-from agents.audit.services.case_service import add_comment, assign_case, open_case
+from agents.audit.services.case_service import add_comment, assign_case, change_status, open_case
 from agents.audit.tests.test_case_grouping import old_exception, rule_for
 from shared.config import settings
 from shared.db import get_db
@@ -125,3 +125,80 @@ def test_timeline_and_comments_in_order(db_session):
     assert [t["action"] for t in timeline] == ["case.opened", "case.assigned", "case.commented"]
     comments = client.get(f"/api/v1/audit/cases/{c.id}/comments", headers=as_user("AUD", AUDITOR_A)).json()
     assert [x["body"] for x in comments] == ["Requested approval records"]
+
+
+# --- Case actions ---
+
+def act(case_id, action, roles, user, json=None):
+    return client.post(f"/api/v1/audit/cases/{case_id}/{action}", json=json, headers=as_user(roles, user))
+
+
+def walk(db, c, *statuses):
+    for status in statuses:
+        change_status(db, c, status, MANAGER, ["AM"], reason="checked")
+
+
+def test_audit_manager_assigns_case():
+    c = client.post("/api/v1/audit/cases", json=MANUAL, headers=as_user("AM", MANAGER)).json()
+    r = act(c["id"], "assign", "AM", MANAGER, {"assignee_id": str(AUDITOR_A)})
+    assert r.status_code == 200 and (r.json()["status"], r.json()["assigned_to"]) == ("ASSIGNED", str(AUDITOR_A))
+
+
+def test_auditor_cannot_assign(db_session):
+    c = case(db_session, "HIGH", AUDITOR_A)
+    assert act(c.id, "assign", "AUD", AUDITOR_A, {"assignee_id": str(AUDITOR_B)}).status_code == 403
+
+
+def test_assigned_auditor_starts_investigation(db_session):
+    c = case(db_session, "HIGH", AUDITOR_A)
+    r = act(c.id, "status", "AUD", AUDITOR_A, {"status": "IN_INVESTIGATION"})
+    assert r.status_code == 200 and r.json()["status"] == "IN_INVESTIGATION"
+
+
+def test_invalid_move_is_409_with_allowed_next(db_session):
+    c = case(db_session, "HIGH")
+    r = act(c.id, "status", "AM", MANAGER, {"status": "CLOSED"})
+    assert r.status_code == 409
+    assert r.json()["detail"] == {"message": "cannot move from OPEN to CLOSED", "allowed_next": ["ASSIGNED"]}
+
+
+def test_no_issue_without_reason_is_422(db_session):
+    c = case(db_session, "LOW", AUDITOR_A)
+    walk(db_session, c, "IN_INVESTIGATION", "PENDING_REVIEW")
+    assert act(c.id, "status", "AUD", AUDITOR_A, {"status": "NO_ISSUE"}).status_code == 422
+
+
+def test_closing_high_case_needs_audit_manager_then_reopen(db_session):
+    c = case(db_session, "HIGH", AUDITOR_A)
+    walk(db_session, c, "IN_INVESTIGATION", "PENDING_REVIEW", "FINDING_CONFIRMED", "ACTION_IN_PROGRESS")
+    # Save the setup like an earlier request would; the refused call's rollback must not undo it.
+    # (Only a savepoint is released: the test transaction is still rolled back at the end.)
+    db_session.commit()
+    refused = act(c.id, "close", "AUD", AUDITOR_A)
+    assert refused.status_code == 403 and refused.json()["detail"]["code"] == "MANAGER_APPROVAL"
+    closed = act(c.id, "close", "AM", MANAGER, {"reason": "debit note recovered"})
+    assert closed.status_code == 200 and closed.json()["status"] == "CLOSED"
+    reopened = act(c.id, "reopen", "AM", MANAGER)
+    assert reopened.status_code == 200 and reopened.json()["status"] == "REOPENED"
+
+
+def test_comment_saved_but_management_cannot_comment(db_session):
+    c = case(db_session, "HIGH", AUDITOR_A)
+    r = act(c.id, "comments", "AUD", AUDITOR_A, {"body": "Vendor contacted"})
+    assert r.status_code == 201 and r.json()["body"] == "Vendor contacted"
+    assert act(c.id, "comments", "MGT", BOARD, {"body": "hello"}).status_code == 403
+
+
+def test_auditor_acting_on_someone_elses_case_gets_404(db_session):
+    c = case(db_session, "HIGH", AUDITOR_A)
+    assert act(c.id, "status", "AUD", AUDITOR_B, {"status": "IN_INVESTIGATION"}).status_code == 404
+
+
+def test_update_logs_only_changed_fields(db_session):
+    c = case(db_session, "HIGH", title="Original title")
+    r = client.put(f"/api/v1/audit/cases/{c.id}", headers=as_user("AM", MANAGER),
+                   json={"title": "Original title", "priority": "CRITICAL"})
+    assert r.status_code == 200 and r.json()["priority"] == "CRITICAL"
+    timeline = client.get(f"/api/v1/audit/cases/{c.id}/timeline", headers=as_user("AM", MANAGER)).json()
+    assert timeline[-1]["action"] == "case.updated"
+    assert timeline[-1]["details"] == {"priority": {"from": "HIGH", "to": "CRITICAL"}}

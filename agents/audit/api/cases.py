@@ -1,21 +1,29 @@
-"""Case API (module M1): list, detail, timeline, comments, and manual cases.
+"""Case API (module M1): list, detail, timeline, comments, manual cases, and case actions.
 
 Who sees which case is decided in ONE place, case_visibility(), used by the list and by every
 single-case endpoint. A case the user may not see looks exactly like one that does not exist (404).
+Actions commit on success and roll back on any error; errors are mapped in _run_action().
 """
 import uuid
+from collections.abc import Callable
+from typing import TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import ColumnElement, and_, false, or_, select, true
 from sqlalchemy.orm import Session
 
 from agents.audit.api.deps import require_permission
+from agents.audit.cases.state_machine import CaseStatus, InvalidTransition, allowed_next
 from agents.audit.models import AuditCase, AuditCaseException, AuditException, AuditRule, CaseSource, Severity
 from agents.audit.permissions import permissions_for
 from agents.audit.schemas.case import (
-    CaseDetailOut, CaseExceptionOut, CaseOut, CommentOut, ManualCaseCreate, TimelineEntryOut,
+    AssignIn, CaseDetailOut, CaseExceptionOut, CaseOut, CaseUpdate, CloseIn, CommentIn, CommentOut,
+    ManualCaseCreate, StatusIn, TimelineEntryOut,
 )
-from agents.audit.services.case_service import case_comments, case_timeline, list_cases, open_case
+from agents.audit.services.case_service import (
+    CaseClosed, ManagerApprovalRequired, add_comment, assign_case, case_comments, case_timeline,
+    change_status, list_cases, open_case, update_case,
+)
 from shared.auth import CurrentUser
 from shared.db import get_db
 
@@ -124,3 +132,73 @@ def create_manual_case(
         db.rollback()
         raise HTTPException(422, detail=str(err)) from None
     return case
+
+
+# --- Case actions ---
+
+T = TypeVar("T")
+
+
+def _run_action(db: Session, action: Callable[[], T]) -> T:
+    """Run a case action: commit on success; on error roll back and answer with a clear status."""
+    try:
+        result = action()
+        db.commit()
+        return result
+    except InvalidTransition as err:
+        db.rollback()
+        raise HTTPException(409, detail={"message": str(err),
+                                         "allowed_next": [str(s) for s in allowed_next(err.current)]}) from None
+    except ManagerApprovalRequired as err:
+        db.rollback()
+        raise HTTPException(403, detail={"code": "MANAGER_APPROVAL", "message": str(err)}) from None
+    except CaseClosed as err:                                 # before ValueError: CaseClosed is one
+        db.rollback()
+        raise HTTPException(409, detail={"message": str(err)}) from None
+    except ValueError as err:                                 # includes ReasonRequired
+        db.rollback()
+        raise HTTPException(422, detail={"message": str(err)}) from None
+
+
+@router.post("/cases/{case_id}/assign", response_model=CaseOut)
+def assign(case_id: uuid.UUID, body: AssignIn,
+           user: CurrentUser = Depends(require_permission("case:assign")), db: Session = Depends(get_db)):
+    case = _visible_case(db, user, case_id)
+    return _run_action(db, lambda: assign_case(db, case, body.assignee_id, user.user_id))
+
+
+@router.post("/cases/{case_id}/status", response_model=CaseOut)
+def set_status(case_id: uuid.UUID, body: StatusIn,
+               user: CurrentUser = Depends(require_permission("case:update")), db: Session = Depends(get_db)):
+    case = _visible_case(db, user, case_id)
+    return _run_action(db, lambda: change_status(db, case, body.status, user.user_id, user.roles, body.reason))
+
+
+@router.post("/cases/{case_id}/close", response_model=CaseOut)
+def close(case_id: uuid.UUID, body: CloseIn | None = None,
+          user: CurrentUser = Depends(require_permission("case:update")), db: Session = Depends(get_db)):
+    case = _visible_case(db, user, case_id)
+    reason = body.reason if body else None
+    return _run_action(db, lambda: change_status(db, case, CaseStatus.CLOSED, user.user_id, user.roles, reason))
+
+
+@router.post("/cases/{case_id}/reopen", response_model=CaseOut)
+def reopen(case_id: uuid.UUID,
+           user: CurrentUser = Depends(require_permission("case:update")), db: Session = Depends(get_db)):
+    case = _visible_case(db, user, case_id)
+    return _run_action(db, lambda: change_status(db, case, CaseStatus.REOPENED, user.user_id, user.roles))
+
+
+@router.post("/cases/{case_id}/comments", response_model=CommentOut, status_code=201)
+def comment(case_id: uuid.UUID, body: CommentIn,
+            user: CurrentUser = Depends(require_permission("case:update")), db: Session = Depends(get_db)):
+    case = _visible_case(db, user, case_id)
+    return _run_action(db, lambda: add_comment(db, case, user.user_id, body.body))
+
+
+@router.put("/cases/{case_id}", response_model=CaseOut)
+def update(case_id: uuid.UUID, body: CaseUpdate,
+           user: CurrentUser = Depends(require_permission("case:assign")), db: Session = Depends(get_db)):
+    case = _visible_case(db, user, case_id)
+    changes = body.model_dump(include=body.model_fields_set)  # only the fields actually sent
+    return _run_action(db, lambda: update_case(db, case, user.user_id, changes))

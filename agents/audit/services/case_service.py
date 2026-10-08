@@ -153,6 +153,38 @@ def change_status(
     return case
 
 
+UPDATABLE_FIELDS = frozenset({"title", "priority", "is_restricted", "department_id"})
+
+
+def update_case(db: Session, case: AuditCase, actor_id: uuid.UUID | None, changes: dict) -> AuditCase:
+    """Change a case's title, priority, restriction or department. Logs only fields that really changed.
+
+    `changes` holds only the fields the caller sent; department_id=None clears the department.
+    """
+    unknown = set(changes) - UPDATABLE_FIELDS
+    if unknown:
+        raise ValueError(f"These fields cannot be changed: {sorted(unknown)}")
+    if changes.get("priority") is not None:
+        Severity(changes["priority"])                         # ValueError for an unknown priority
+    if "title" in changes and not (changes["title"] or "").strip():
+        raise ValueError("The title cannot be empty")
+
+    changed = {}
+    for field, new in changes.items():
+        if field in ("title", "priority", "is_restricted") and new is None:
+            continue                                          # only department_id may be cleared
+        old = getattr(case, field)
+        if new != old:
+            setattr(case, field, new)
+            changed[field] = {"from": str(old) if isinstance(old, uuid.UUID) else old,
+                              "to": str(new) if isinstance(new, uuid.UUID) else new}
+    if changed:
+        case.updated_by = actor_id
+        db.flush()
+        _log(db, case, actor_id, "case.updated", **changed)
+    return case
+
+
 def add_comment(db: Session, case: AuditCase, author_id: uuid.UUID, body: str) -> AuditCaseComment:
     """Add an internal comment. The log records that a comment was added, not its text."""
     body = (body or "").strip()
