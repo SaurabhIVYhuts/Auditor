@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { DevRoleProvider, DevRoleSelect } from "@/components/DevRole";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const NAV: { label: string; href?: string }[] = [
   { label: "Overview", href: "/audit" },
   { label: "Procurement trail", href: "/audit/trail" },
-  { label: "Cases" },
+  { label: "Cases", href: "/audit/cases" },
   { label: "Rules", href: "/audit/rules" },
   { label: "Findings" },
   { label: "Reports" },
@@ -30,7 +31,12 @@ export default function AuditLayout({ children }: { children: ReactNode }) {
           </ul>
           <DevRoleSelect />
         </nav>
-        <main style={{ flex: 1, padding: 24 }}>{children}</main>
+        <main style={{ flex: 1, padding: 24 }}>
+          <header style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <NotificationBell />
+          </header>
+          {children}
+        </main>
       </div>
     </DevRoleProvider>
   );

@@ -1,7 +1,7 @@
 // DEVELOPMENT ONLY identity: matches the backend's temporary header login.
 // Replace with the platform's real JWT login when it exists.
 export const DEV_TENANT_ID = "22222222-2222-2222-2222-222222222222";
-const DEV_USER_ID = "11111111-1111-1111-1111-111111111111";
+export const DEV_USER_ID = "11111111-1111-1111-1111-111111111111";
 export const DEV_ROLES = ["AUD", "AM", "CO", "OWN", "MGT", "ADM"];
 
 function devHeaders(role: string): Record<string, string> {

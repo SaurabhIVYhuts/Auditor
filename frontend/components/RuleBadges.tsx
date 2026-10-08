@@ -11,6 +11,19 @@ const STATUS_COLOURS: Record<string, string> = {
   INACTIVE: "#9e9e9e",
 };
 
+const CASE_STATUS_COLOURS: Record<string, string> = {
+  OPEN: "#455a64",
+  ASSIGNED: "#1565c0",
+  IN_INVESTIGATION: "#283593",
+  ON_HOLD: "#b26a00",
+  PENDING_REVIEW: "#6a1b9a",
+  FINDING_CONFIRMED: "#c62828",
+  NO_ISSUE: "#2e7d32",
+  ACTION_IN_PROGRESS: "#00695c",
+  CLOSED: "#9e9e9e",
+  REOPENED: "#e65100",
+};
+
 const FALLBACK_COLOUR = "#616161";
 
 function Badge({ text, colour }: { text: string; colour: string }) {
@@ -37,4 +50,8 @@ export function SeverityBadge({ severity }: { severity: string }) {
 
 export function StatusBadge({ status }: { status: string }) {
   return <Badge text={status} colour={STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
+}
+
+export function CaseStatusBadge({ status }: { status: string }) {
+  return <Badge text={status.replaceAll("_", " ")} colour={CASE_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
 }
