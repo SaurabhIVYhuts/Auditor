@@ -24,6 +24,7 @@ Thumbs.db
 
 # Local file storage (uploaded evidence etc.)
 storage/
+var/
 
 # Never commit PDFs (the internal architecture document must stay out of this public repo)
 *.pdf
