@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, MetaData, false, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Predictable names for indexes and constraints, so migrations stay stable.
 NAMING_CONVENTION = {
@@ -22,6 +22,16 @@ NAMING_CONVENTION = {
 def make_metadata(schema: str) -> MetaData:
     """MetaData for one agent's schema (e.g. 'audit')."""
     return MetaData(schema=schema, naming_convention=NAMING_CONVENTION)
+
+
+class SharedBase(DeclarativeBase):
+    """Base for placeholder platform tables (audit_logs, notifications).
+
+    Kept separate from agent bases so shared/ never imports agents/. Lives in the "audit"
+    schema for now; the platform versions will live in their own schema.
+    """
+
+    metadata = make_metadata("audit")
 
 
 class CommonColumns:

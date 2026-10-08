@@ -8,9 +8,11 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
+import shared.audit_log  # noqa: F401  (registers the placeholder platform tables on SharedBase)
+import shared.notifications  # noqa: F401
 from agents.audit.models import AUDIT_SCHEMA, AuditBase
-from shared.audit_log import SharedBase
 from shared.config import settings
+from shared.models import SharedBase
 
 config = context.config
 if config.config_file_name is not None:

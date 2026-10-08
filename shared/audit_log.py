@@ -13,15 +13,9 @@ from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, Identity, Index, String, func, select, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from shared.models import make_metadata
-
-
-class SharedBase(DeclarativeBase):
-    """Base for placeholder platform tables. Kept separate so shared/ never imports agents/."""
-
-    metadata = make_metadata("audit")
+from shared.models import SharedBase
 
 
 class AuditLog(SharedBase):

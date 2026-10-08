@@ -17,9 +17,10 @@ from agents.audit.models import (
     AuditCase, AuditCaseComment, AuditCaseException, AuditException, CaseDomain, CaseSource,
     ExceptionStatus, Severity,
 )
-from agents.audit.permissions import has_permission
+from agents.audit.permissions import AuditRole, has_permission
 from shared.audit_log import AuditLog, list_for_entity, log_action
 from shared.config import settings
+from shared.notifications import notify_role, notify_user
 
 CASE_ENTITY = "audit_case"
 NEEDS_MANAGER_TO_CLOSE = frozenset({Severity.HIGH.value, Severity.CRITICAL.value})
@@ -82,6 +83,9 @@ def open_case(
     _log(db, case, actor_id, "case.opened", case_number=case.case_number, exceptions=len(exceptions))
     for exc in exceptions:
         add_exception_to_case(db, case, exc, actor_id)
+    if priority == Severity.CRITICAL.value:
+        notify_role(db, tenant_id, AuditRole.AUDIT_MANAGER.value, "case.critical_opened",
+                    f"Critical case {case.case_number} opened", case.title, CASE_ENTITY, case.id)
     return case
 
 
@@ -117,6 +121,9 @@ def assign_case(db: Session, case: AuditCase, assignee_id: uuid.UUID, actor_id: 
     db.flush()
     _log(db, case, actor_id, "case.assigned",
          **{"from": str(previous) if previous else None, "to": str(assignee_id)})
+    if assignee_id != previous:                               # reassigning to the same person: no message
+        notify_user(db, case.tenant_id, assignee_id, "case.assigned",
+                    f"Case {case.case_number} assigned to you", case.title, CASE_ENTITY, case.id)
     return case
 
 
