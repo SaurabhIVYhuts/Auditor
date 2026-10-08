@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { useDevRole } from "@/components/DevRole";
+import { SeverityBadge, StatusBadge } from "@/components/RuleBadges";
 
 type Rule = {
   id: string;
@@ -19,39 +20,8 @@ type Load =
   | { state: "ready"; rules: Rule[] }
   | { state: "error"; message: string };
 
-const SEVERITY_COLOURS: Record<string, string> = {
-  LOW: "#2e7d32",
-  MEDIUM: "#b26a00",
-  HIGH: "#c62828",
-  CRITICAL: "#6a1b9a",
-};
-
-const STATUS_COLOURS: Record<string, string> = {
-  DRAFT: "#616161",
-  ACTIVE: "#1565c0",
-  INACTIVE: "#9e9e9e",
-};
-
 const FILTERS = ["ALL", "DRAFT", "ACTIVE", "INACTIVE"] as const;
 type Filter = (typeof FILTERS)[number];
-
-function Badge({ text, colour }: { text: string; colour: string }) {
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 10,
-        fontSize: 12,
-        fontWeight: 600,
-        color: "#fff",
-        background: colour,
-      }}
-    >
-      {text}
-    </span>
-  );
-}
 
 function errorMessage(status: number): string {
   if (status === 401) return "You are not signed in.";
@@ -117,10 +87,10 @@ export default function RulesPage() {
                 <td>{r.name}</td>
                 <td>{r.domain}</td>
                 <td>
-                  <Badge text={r.severity} colour={SEVERITY_COLOURS[r.severity] ?? "#616161"} />
+                  <SeverityBadge severity={r.severity} />
                 </td>
                 <td>
-                  <Badge text={r.status} colour={STATUS_COLOURS[r.status] ?? "#616161"} />
+                  <StatusBadge status={r.status} />
                 </td>
                 <td>v{r.current_version}</td>
               </tr>
