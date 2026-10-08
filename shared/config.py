@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Fail safe: if ENVIRONMENT is not set, assume production (dev login disabled).
     environment: str = "production"
 
+    # The hospital's local time zone (IANA name), e.g. for which year a case number belongs to.
+    hospital_timezone: str = "Asia/Kolkata"
+
     # The real value comes from .env (never committed).
     # This placeholder has no real password on purpose.
     database_url: str = "postgresql+psycopg://auditor_app:change_me@localhost:5432/auditor_db"
