@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { DEV_USER_ID, apiGet } from "@/lib/api";
+import { apiGet, devUserId } from "@/lib/api";
 import { label, personLabel } from "@/lib/format";
 import { useDevRole } from "@/components/DevRole";
+import { FilterSelect } from "@/components/FilterSelect";
 import { CaseStatusBadge, SeverityBadge } from "@/components/RuleBadges";
 
 type Case = {
@@ -36,22 +37,6 @@ function errorMessage(status: number): string {
   return `Could not load cases (HTTP ${status}).`;
 }
 
-function Select({ name, value, options, onChange }: {
-  name: string; value: string; options: string[]; onChange: (v: string) => void;
-}) {
-  return (
-    <label style={{ marginRight: 12 }}>
-      {name}:{" "}
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">All</option>
-        {options.map((o) => (
-          <option key={o} value={o}>{label(o)}</option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 export default function CasesPage() {
   const { role } = useDevRole();
   const [status, setStatus] = useState("");
@@ -67,7 +52,7 @@ export default function CasesPage() {
     if (priority) params.set("priority", priority);
     if (domain) params.set("domain", domain);
     if (openOnly) params.set("open_only", "true");
-    if (mine) params.set("assigned_to", DEV_USER_ID);
+    if (mine) params.set("assigned_to", devUserId());
     apiGet<Case[]>(`/audit/cases?${params}`, role)
       .then((r) =>
         setLoad(
@@ -83,9 +68,9 @@ export default function CasesPage() {
     <div>
       <h1>Cases</h1>
       <div style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-        <Select name="Status" value={status} options={STATUSES} onChange={setStatus} />
-        <Select name="Priority" value={priority} options={PRIORITIES} onChange={setPriority} />
-        <Select name="Domain" value={domain} options={DOMAINS} onChange={setDomain} />
+        <FilterSelect name="Status" value={status} options={STATUSES} onChange={setStatus} />
+        <FilterSelect name="Priority" value={priority} options={PRIORITIES} onChange={setPriority} />
+        <FilterSelect name="Domain" value={domain} options={DOMAINS} onChange={setDomain} />
         <label style={{ marginRight: 12 }}>
           <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} /> Open only
         </label>

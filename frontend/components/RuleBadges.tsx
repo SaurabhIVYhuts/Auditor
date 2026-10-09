@@ -24,6 +24,32 @@ const CASE_STATUS_COLOURS: Record<string, string> = {
   REOPENED: "#e65100",
 };
 
+const FINDING_STATUS_COLOURS: Record<string, string> = {
+  DRAFT: "#616161",
+  UNDER_REVIEW: "#6a1b9a",
+  CONFIRMED: "#c62828",
+  DISMISSED: "#9e9e9e",
+  ACTION_ASSIGNED: "#00695c",
+  RESOLVED: "#1565c0",
+  VERIFIED: "#2e7d32",
+  REOPENED: "#e65100",
+  CLOSED: "#9e9e9e",
+};
+
+const ACTION_STATUS_COLOURS: Record<string, string> = {
+  OPEN: "#455a64",
+  IN_PROGRESS: "#1565c0",
+  SUBMITTED: "#6a1b9a",
+  RETURNED: "#e65100",
+  VERIFIED: "#2e7d32",
+  CLOSED: "#9e9e9e",
+};
+
+const EVIDENCE_STATUS_COLOURS: Record<string, string> = {
+  ACTIVE: "#2e7d32",
+  SUPERSEDED: "#9e9e9e",
+};
+
 const FALLBACK_COLOUR = "#616161";
 
 function Badge({ text, colour }: { text: string; colour: string }) {
@@ -54,4 +80,16 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function CaseStatusBadge({ status }: { status: string }) {
   return <Badge text={status.replaceAll("_", " ")} colour={CASE_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
+}
+
+export function EvidenceStatusBadge({ status }: { status: string }) {
+  return <Badge text={status} colour={EVIDENCE_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
+}
+
+export function FindingStatusBadge({ status }: { status: string }) {
+  return <Badge text={status.replaceAll("_", " ")} colour={FINDING_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
+}
+
+export function ActionStatusBadge({ status }: { status: string }) {
+  return <Badge text={status.replaceAll("_", " ")} colour={ACTION_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
 }

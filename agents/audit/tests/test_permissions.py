@@ -22,9 +22,9 @@ def test_only_audit_manager_has_approval_powers(permission):
 
 
 def test_auditor_can_draft_and_submit_but_not_confirm_findings():
-    assert has_permission(["AUD"], "finding:create")
-    assert has_permission(["AUD"], "finding:submit")
+    assert has_permission(["AUD"], "finding:write")             # create, edit and submit
     assert not has_permission(["AUD"], "finding:confirm")
+    assert has_permission(["MGT"], "finding:read") and not has_permission(["MGT"], "finding:write")
 
 
 def test_management_reads_only_high_risk_cases_and_cannot_change_them():

@@ -82,10 +82,14 @@ class AuditCaseComment(CommonColumns, AuditBase):
 
 
 class AuditCaseCounter(CommonColumns, AuditBase):
-    """Last case number used per hospital and year. Only changed by cases.numbering."""
+    """Last number used per hospital, prefix (AUD = cases, FND = findings, ...) and year.
+
+    Only changed by cases.numbering. The table name stays from when it counted cases only.
+    """
 
     __tablename__ = "audit_case_counters"
-    __table_args__ = (UniqueConstraint("tenant_id", "year"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "prefix", "year"),)
 
+    prefix: Mapped[str] = mapped_column(String(10))
     year: Mapped[int]
     last_number: Mapped[int] = mapped_column(default=0, server_default="0")

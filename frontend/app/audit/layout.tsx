@@ -2,21 +2,23 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { DevRoleProvider, DevRoleSelect } from "@/components/DevRole";
 import { NotificationBell } from "@/components/NotificationBell";
+import styles from "./layout.module.css";
 
 const NAV: { label: string; href?: string }[] = [
   { label: "Overview", href: "/audit" },
   { label: "Procurement trail", href: "/audit/trail" },
   { label: "Cases", href: "/audit/cases" },
   { label: "Rules", href: "/audit/rules" },
-  { label: "Findings" },
+  { label: "Findings", href: "/audit/findings" },
+  { label: "My Actions", href: "/audit/actions" },
   { label: "Reports" },
 ];
 
 export default function AuditLayout({ children }: { children: ReactNode }) {
   return (
     <DevRoleProvider>
-      <div style={{ display: "flex", minHeight: "100vh", fontFamily: "system-ui, sans-serif" }}>
-        <nav style={{ width: 220, padding: 16, borderRight: "1px solid #ccc" }}>
+      <div className={styles.shell}>
+        <nav className={styles.nav}>
           <h2 style={{ fontSize: 18, marginTop: 0 }}>Auditor</h2>
           <ul style={{ listStyle: "none", padding: 0 }}>
             {NAV.map((item) => (
@@ -31,7 +33,7 @@ export default function AuditLayout({ children }: { children: ReactNode }) {
           </ul>
           <DevRoleSelect />
         </nav>
-        <main style={{ flex: 1, padding: 24 }}>
+        <main className={styles.main}>
           <header style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
             <NotificationBell />
           </header>

@@ -5,17 +5,19 @@ transaction. Does NOT commit: the caller does.
 """
 import uuid
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from agents.audit.cases.numbering import next_case_number
 from agents.audit.cases.state_machine import OPEN_STATUSES, CaseStatus, ensure_transition
+from agents.audit.actions.state_machine import OPEN_STATUSES as ACTION_OPEN_STATUSES
+from agents.audit.findings.state_machine import OPEN_STATUSES as FINDING_OPEN_STATUSES
 from agents.audit.models import (
-    AuditCase, AuditCaseComment, AuditCaseException, AuditException, CaseDomain, CaseSource,
-    ExceptionStatus, Severity,
+    AuditCase, AuditCaseComment, AuditCaseException, AuditException, AuditFinding, CaseDomain, CaseSource,
+    CorrectiveAction, ExceptionStatus, Severity,
 )
 from agents.audit.permissions import AuditRole, has_permission
 from shared.audit_log import AuditLog, list_for_entity, log_action
@@ -39,13 +41,22 @@ class CaseClosed(ValueError):
     """The case is CLOSED; it must be reopened before this can be done."""
 
 
+class FindingsStillOpen(ValueError):
+    """A case cannot close while it still has findings that need work."""
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _hospital_today() -> date:
+    """Today's date in the hospital's time zone."""
+    return _now().astimezone(ZoneInfo(settings.hospital_timezone)).date()
+
+
 def _hospital_year() -> int:
     """Current year in the hospital's time zone (a case opened at 00:15 IST on 1 Jan is next year's)."""
-    return _now().astimezone(ZoneInfo(settings.hospital_timezone)).year
+    return _hospital_today().year
 
 
 def _log(db: Session, case: AuditCase, actor_id: uuid.UUID | None, action: str, **details) -> None:
@@ -127,6 +138,21 @@ def assign_case(db: Session, case: AuditCase, assignee_id: uuid.UUID, actor_id: 
     return case
 
 
+def _ensure_nothing_open(db: Session, case: AuditCase) -> None:
+    """Refuse to close while findings or corrective actions of the case still need work."""
+    findings = db.scalar(select(func.count()).select_from(AuditFinding).where(
+        AuditFinding.case_id == case.id, AuditFinding.is_deleted.is_(False),
+        AuditFinding.status.in_(sorted(FINDING_OPEN_STATUSES)),
+    ))
+    actions = db.scalar(select(func.count()).select_from(CorrectiveAction).where(
+        CorrectiveAction.case_id == case.id, CorrectiveAction.is_deleted.is_(False),
+        CorrectiveAction.status.in_(sorted(ACTION_OPEN_STATUSES)),
+    ))
+    parts = [f"{n} {word}{'s' if n != 1 else ''}" for n, word in ((findings, "finding"), (actions, "action")) if n]
+    if parts:
+        raise FindingsStillOpen(f"{' / '.join(parts)} still open")
+
+
 def change_status(
     db: Session, case: AuditCase, target: str, actor_id: uuid.UUID | None,
     actor_roles: Iterable[str], reason: str | None = None,
@@ -147,7 +173,7 @@ def change_status(
     if target == CaseStatus.CLOSED:
         if case.priority in NEEDS_MANAGER_TO_CLOSE and not is_manager:
             raise ManagerApprovalRequired("Only an Audit Manager can close a HIGH or CRITICAL case")
-        # Phase 4: refuse close while findings/actions are open.
+        _ensure_nothing_open(db, case)
         case.closed_at = _now()
     if target == CaseStatus.REOPENED:
         case.closed_at = None

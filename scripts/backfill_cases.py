@@ -1,4 +1,5 @@
-"""Development: put exceptions made before case grouping existed into cases.
+"""Development: put exceptions made before case grouping existed into cases, and give cases
+that have no evidence yet the snapshot evidence of their records.
 
 Run:  .venv\\Scripts\\python -m scripts.backfill_cases [tenant-uuid]
 Development/test only. Uses the demo hospital unless a tenant id is given.
@@ -7,7 +8,7 @@ Safe to run again: the second run finds no NEW exceptions and changes nothing.
 import sys
 import uuid
 
-from agents.audit.services.case_grouping_service import backfill_cases
+from agents.audit.services.case_grouping_service import backfill_case_evidence, backfill_cases
 from scripts.seed_rule_pack import DEMO_TENANT_ID
 from shared.config import settings
 from shared.db import SessionLocal
@@ -22,6 +23,7 @@ def main() -> None:
     db = SessionLocal()
     try:
         counts = backfill_cases(db, tenant_id)
+        evidence = backfill_case_evidence(db, tenant_id)
         db.commit()
     except Exception:
         db.rollback()
@@ -33,6 +35,7 @@ def main() -> None:
     print(f"cases_created: {counts['cases_created']}")
     print(f"joined:        {counts['joined']}")
     print(f"skipped:       {counts['skipped']}  (no rule)")
+    print(f"evidence:      {evidence['evidence_linked']} linked to {evidence['cases_updated']} cases without evidence")
     print(f"Tenant: {tenant_id}")
 
 

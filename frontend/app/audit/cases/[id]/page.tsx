@@ -2,11 +2,15 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { DEV_USER_ID, apiGet, apiPost, type ApiError } from "@/lib/api";
-import { type TimelineEntry, actorLabel, describeEntry } from "@/lib/caseTimeline";
+import { apiGet, apiPost, devUserId } from "@/lib/api";
+import { actionProblem } from "@/lib/apiErrors";
+import { type TimelineEntry } from "@/lib/caseTimeline";
 import { label, personLabel, shortId } from "@/lib/format";
 import { useDevRole } from "@/components/DevRole";
+import { CaseFindings } from "@/components/CaseFindings";
+import { EvidenceSection } from "@/components/EvidenceSection";
 import { CaseStatusBadge, SeverityBadge } from "@/components/RuleBadges";
+import { Timeline } from "@/components/Timeline";
 
 type CaseException = {
   id: string;
@@ -43,29 +47,13 @@ type Load =
 
 type Note = { kind: "ok" | "problem"; text: string } | null;
 
+const NOT_FOUND = "Case not found or not visible to your role.";
+
 function loadError(status: number): string {
   if (status === 401) return "You are not signed in.";
   if (status === 403) return "Your role is not allowed to view cases.";
-  if (status === 404) return "Case not found or not visible to your role.";
+  if (status === 404) return NOT_FOUND;
   return `Could not load the case (HTTP ${status}).`;
-}
-
-function actionProblem(status: number, error: ApiError): string {
-  const detail = error?.detail;
-  const info = detail && typeof detail === "object" && !Array.isArray(detail)
-    ? (detail as { code?: string; message?: string; allowed_next?: string[] })
-    : {};
-  if (status === 403 && info.code === "MANAGER_APPROVAL") {
-    return "Only an Audit Manager can do this for a HIGH/CRITICAL case.";
-  }
-  if (status === 403) return "Your role cannot do this.";
-  if (status === 404) return "Case not found or not visible to your role.";
-  if (status === 409 || status === 422) {
-    if (Array.isArray(detail)) return "Please check what you entered.";   // request validation errors
-    const allowed = info.allowed_next?.length ? ` Allowed next: ${info.allowed_next.map(label).join(", ")}.` : "";
-    return `${info.message ?? (typeof detail === "string" ? detail : "The action was refused.")}${allowed}`;
-  }
-  return `The action did not complete (HTTP ${status}).`;
 }
 
 const box = { border: "1px solid #ddd", borderRadius: 6, padding: 12, marginBottom: 16 } as const;
@@ -109,7 +97,7 @@ export default function CaseWorkspacePage() {
     try {
       const r = await apiPost(`/audit/cases/${id}/${path}`, role, body);
       const ok = r.status === 200 || r.status === 201;
-      setNote(ok ? { kind: "ok", text: success } : { kind: "problem", text: actionProblem(r.status, r.error) });
+      setNote(ok ? { kind: "ok", text: success } : { kind: "problem", text: actionProblem(r.status, r.error, NOT_FOUND) });
       await reload();
       return ok;
     } catch {
@@ -175,7 +163,7 @@ export default function CaseWorkspacePage() {
       <div style={box}>
         <h3 style={{ marginTop: 0 }}>Actions</h3>
         <div style={{ marginBottom: 8 }}>
-          <button disabled={busy} onClick={() => assign(DEV_USER_ID)} style={{ marginRight: 8 }}>Assign to me</button>
+          <button disabled={busy} onClick={() => assign(devUserId())} style={{ marginRight: 8 }}>Assign to me</button>
           <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="User id" size={38} />{" "}
           <button disabled={busy || !assignee.trim()} onClick={() => assign(assignee)}>Assign</button>
         </div>
@@ -229,6 +217,10 @@ export default function CaseWorkspacePage() {
         </table>
       )}
 
+      <CaseFindings caseId={detail.id} />
+
+      <EvidenceSection listPath={`/audit/cases/${detail.id}/evidence`} uploadPath={`/audit/cases/${detail.id}/evidence`} />
+
       <h3>Comments</h3>
       {comments.length === 0 && <p>No comments yet.</p>}
       <ul style={{ listStyle: "none", padding: 0 }}>
@@ -245,14 +237,7 @@ export default function CaseWorkspacePage() {
       <button disabled={busy || !comment.trim()} onClick={addComment} style={{ marginBottom: 16 }}>Add comment</button>
 
       <h3>Timeline</h3>
-      <ol style={{ paddingLeft: 20 }}>
-        {timeline.map((t, i) => (
-          <li key={i} style={{ marginBottom: 4 }}>
-            {describeEntry(t)}{" "}
-            <small style={{ opacity: 0.7 }}>— {actorLabel(t.actor_id)}, {new Date(t.created_at).toLocaleString()}</small>
-          </li>
-        ))}
-      </ol>
+      <Timeline entries={timeline} />
     </div>
   );
 }

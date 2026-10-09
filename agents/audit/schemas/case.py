@@ -83,6 +83,26 @@ class CaseUpdate(BaseModel):
     department_id: uuid.UUID | None = None
 
 
+class EvidenceOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    evidence_type: str
+    source_system: str
+    sha256: str
+    status: str
+    superseded_reason: str | None
+    contains_phi: bool
+    captured_by: uuid.UUID | None
+    captured_at: datetime
+    filename: str | None          # set for uploaded documents
+    is_snapshot: bool             # True for frozen copies of system records
+
+
+class SupersedeIn(BaseModel):
+    reason: str = Field(max_length=2000)
+    replaced_by: uuid.UUID | None = None
+
+
 class CommentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

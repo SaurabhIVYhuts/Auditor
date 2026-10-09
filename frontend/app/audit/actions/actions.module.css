@@ -1,0 +1,25 @@
+/* Table on wide screens, one card per action on phones. */
+.cards {
+  display: none;
+}
+
+.card {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.card p {
+  margin: 4px 0;
+}
+
+@media (max-width: 600px) {
+  .table {
+    display: none;
+  }
+
+  .cards {
+    display: block;
+  }
+}

@@ -9,6 +9,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
 import shared.audit_log  # noqa: F401  (registers the placeholder platform tables on SharedBase)
+import shared.documents  # noqa: F401
 import shared.notifications  # noqa: F401
 from agents.audit.models import AUDIT_SCHEMA, AuditBase
 from shared.config import settings

@@ -29,11 +29,11 @@ AUDITOR = frozenset({
     "exception:read", "exception:create_case",
     "source_record:read",
     "rule:read",
-    "evidence:upload", "evidence:read", "evidence:verify",
+    "evidence:write", "evidence:read", "evidence:verify", "evidence:supersede",
     "risk:read",
     "anomaly:read", "anomaly:feedback",
-    "finding:read", "finding:create", "finding:submit",
-    "action:read", "action:create", "action:verify",
+    "finding:read", "finding:write",
+    "action:read", "action:write", "action:verify",
     "report:read", "report:create",
     "dashboard:read",
 })
@@ -41,7 +41,7 @@ AUDITOR = frozenset({
 AUDIT_MANAGER = AUDITOR | frozenset({
     "case:create", "case:assign", "case:close_high_risk", "case:read_all", "case:read_restricted",
     "rule:write", "rule:activate", "rule:run",
-    "evidence:export_pack", "evidence:supersede",
+    "evidence:export_pack",
     "risk:configure", "risk:override", "risk:department_read",
     "anomaly:suppress",
     "finding:confirm", "finding:dismiss",
@@ -54,19 +54,21 @@ COMPLIANCE_OFFICER = frozenset({
     "rule:read", "rule:write",
     "policy:read", "policy:write",
     "compliance:run", "compliance:read",
-    "evidence:upload", "evidence:read",
+    "evidence:write", "evidence:read",
     "dashboard:summary",
 })
 
 AUDITEE = frozenset({
     "query:respond",             # answer queries in their own thread only
     "evidence:upload_own",       # upload evidence to their own query/action only
+    "evidence:read_own",         # view/download evidence of their own actions only
     "finding:respond",           # management response on a confirmed finding
-    "action:read_own", "action:submit",
+    "finding:read_own",          # their own confirmed findings only (not drafts, not other people's)
+    "action:read_own", "action:work",  # see, start and submit their own corrective actions
 })
 
 MANAGEMENT = frozenset({
-    "case:read", "case:read_high_risk",
+    "case:read", "case:read_high_risk", "evidence:read", "finding:read", "action:read",
     "dashboard:summary",
     "risk:department_read",
     "report:read",
