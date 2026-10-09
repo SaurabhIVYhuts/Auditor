@@ -20,6 +20,10 @@ class InvalidTransition(Exception):
         self.allowed = allowed or []
 
 
+class NotAllowed(PermissionError):
+    """This person may not do this step (e.g. only the action's owner may submit it)."""
+
+
 class StateMachine:
     def __init__(self, statuses: type[StrEnum], transitions: Mapping[StrEnum, frozenset[StrEnum]]):
         missing = set(statuses) - set(transitions)
@@ -38,6 +42,21 @@ class StateMachine:
     def allowed_next(self, current: str) -> list[StrEnum]:
         """Statuses `current` may move to, in a stable order (for buttons and messages)."""
         return sorted(self.transitions[self.statuses(current)])
+
+    def path(self, current: str, target: str) -> list[StrEnum] | None:
+        """Shortest list of allowed moves from current to target ([] if already there, None if impossible)."""
+        start, goal = self.statuses(current), self.statuses(target)
+        paths = {start: []}
+        queue = [start]
+        while queue:
+            status = queue.pop(0)
+            if status == goal:
+                return paths[status]
+            for nxt in sorted(self.transitions[status]):
+                if nxt not in paths:
+                    paths[nxt] = paths[status] + [nxt]
+                    queue.append(nxt)
+        return None
 
     def ensure_transition(self, current: str, target: str) -> None:
         """Raise InvalidTransition unless the move is allowed."""

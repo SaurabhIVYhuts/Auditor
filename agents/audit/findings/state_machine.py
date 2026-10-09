@@ -49,3 +49,4 @@ _MACHINE = StateMachine(FindingStatus, TRANSITIONS)
 can_transition = _MACHINE.can_transition
 allowed_next = _MACHINE.allowed_next
 ensure_transition = _MACHINE.ensure_transition
+path = _MACHINE.path

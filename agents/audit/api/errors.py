@@ -2,7 +2,7 @@
 
 Used by the case, evidence and finding APIs, so the same problem always gives the same answer:
   409 INTEGRITY_FAILED (the alert is COMMITTED first), 409 {message, allowed_next}, 409 {message},
-  403 MAKER_CHECKER, 403 MANAGER_APPROVAL, 422 {message[, missing]}.
+  403 MAKER_CHECKER, 403 MANAGER_APPROVAL, 403 NOT_ALLOWED, 422 {message[, missing]}.
 """
 from collections.abc import Callable
 from typing import TypeVar
@@ -14,7 +14,7 @@ from agents.audit.services.case_service import CaseClosed, FindingsStillOpen, Ma
 from agents.audit.services.evidence_service import EvidenceIntegrityError
 from agents.audit.services.finding_service import FieldsRequired
 from agents.audit.services.rule_registry import MakerCheckerError
-from agents.audit.workflow import InvalidTransition
+from agents.audit.workflow import InvalidTransition, NotAllowed
 
 T = TypeVar("T")
 
@@ -39,6 +39,9 @@ def run_action(db: Session, action: Callable[[], T]) -> T:
     except ManagerApprovalRequired as err:
         db.rollback()
         raise HTTPException(403, detail={"code": "MANAGER_APPROVAL", "message": str(err)}) from None
+    except NotAllowed as err:
+        db.rollback()
+        raise HTTPException(403, detail={"code": "NOT_ALLOWED", "message": str(err)}) from None
     except FieldsRequired as err:
         db.rollback()
         raise HTTPException(422, detail={"message": str(err), "missing": err.missing}) from None

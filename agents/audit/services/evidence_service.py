@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 
 from agents.audit.findings.state_machine import CONFIRMED_STATUSES
 from agents.audit.models import (
-    AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, AuditSourceRecord, EvidenceSource,
-    EvidenceStatus, EvidenceType, LinkTarget,
+    AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, AuditSourceRecord, CorrectiveAction,
+    EvidenceSource, EvidenceStatus, EvidenceType, LinkTarget,
 )
 from agents.audit.permissions import AuditRole, has_permission
 from agents.audit.services.case_service import ManagerApprovalRequired
@@ -90,15 +90,12 @@ def snapshot_evidence(
     return evidence
 
 
-TARGET_MODELS = {LinkTarget.CASE: AuditCase, LinkTarget.FINDING: AuditFinding}
+TARGET_MODELS = {LinkTarget.CASE: AuditCase, LinkTarget.FINDING: AuditFinding, LinkTarget.ACTION: CorrectiveAction}
 
 
 def _check_target(db: Session, tenant_id: uuid.UUID, target_type: str, target_id: uuid.UUID) -> None:
     target_type = LinkTarget(target_type)
-    model = TARGET_MODELS.get(target_type)
-    if model is None:
-        raise NotImplementedError("Corrective actions: the table arrives in Step 25")
-    target = db.get(model, target_id)
+    target = db.get(TARGET_MODELS[target_type], target_id)
     if target is None or target.tenant_id != tenant_id or target.is_deleted:
         raise ValueError(f"{target_type.value.capitalize()} not found for this hospital")
 

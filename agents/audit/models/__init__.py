@@ -2,6 +2,7 @@
 
 Every model must be imported here, so Alembic can see it.
 """
+from agents.audit.models.action import CorrectiveAction
 from agents.audit.models.base import AUDIT_SCHEMA, AuditBase
 from agents.audit.models.case import (
     AuditCase, AuditCaseComment, AuditCaseCounter, AuditCaseException, CaseDomain, CaseSource,
@@ -23,6 +24,6 @@ __all__ = [
     "AUDIT_SCHEMA", "AuditBase", "AuditCase", "AuditCaseComment", "AuditCaseCounter",
     "AuditCaseException", "AuditConfig", "AuditEvidence", "AuditEvidenceLink", "AuditException", "AuditFinding",
     "AuditProcessedEvent", "AuditRule", "AuditRuleRun", "AuditRuleVersion", "AuditSourceRecord",
-    "CaseDomain", "CaseSource", "EvidenceSource", "EvidenceStatus", "EvidenceType", "ExceptionSource",
+    "CaseDomain", "CaseSource", "CorrectiveAction", "EvidenceSource", "EvidenceStatus", "EvidenceType", "ExceptionSource",
     "ExceptionStatus", "LinkTarget", "RuleDomain", "RuleStatus", "RunStatus", "RunTrigger", "Severity",
 ]

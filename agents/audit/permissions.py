@@ -33,7 +33,7 @@ AUDITOR = frozenset({
     "risk:read",
     "anomaly:read", "anomaly:feedback",
     "finding:read", "finding:write",
-    "action:read", "action:create", "action:verify",
+    "action:read", "action:write", "action:verify",
     "report:read", "report:create",
     "dashboard:read",
 })
@@ -63,11 +63,11 @@ AUDITEE = frozenset({
     "evidence:upload_own",       # upload evidence to their own query/action only
     "finding:respond",           # management response on a confirmed finding
     "finding:read_own",          # their own confirmed findings only (not drafts, not other people's)
-    "action:read_own", "action:submit",
+    "action:read_own", "action:work",  # see, start and submit their own corrective actions
 })
 
 MANAGEMENT = frozenset({
-    "case:read", "case:read_high_risk", "evidence:read", "finding:read",
+    "case:read", "case:read_high_risk", "evidence:read", "finding:read", "action:read",
     "dashboard:summary",
     "risk:department_read",
     "report:read",

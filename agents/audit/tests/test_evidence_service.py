@@ -89,9 +89,9 @@ def test_other_hospitals_case_is_refused(db_session):
         link_evidence(db_session, evidence, "CASE", other_case.id, ACTOR)
 
 
-def test_actions_are_not_ready_yet(db_session):
+def test_unknown_action_is_refused(db_session):
     evidence = upload(db_session)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError, match="Action not found"):
         link_evidence(db_session, evidence, "ACTION", uuid.uuid4(), ACTOR)
 
 

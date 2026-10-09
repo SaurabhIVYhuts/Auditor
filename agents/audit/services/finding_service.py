@@ -13,12 +13,17 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agents.audit.actions.state_machine import ActionStatus
+from agents.audit.actions.state_machine import ensure_transition as ensure_action_transition
 from agents.audit.cases.numbering import next_number
 from agents.audit.cases.state_machine import CaseStatus
 from agents.audit.findings.state_machine import FindingStatus, ensure_transition
 from agents.audit.models import (
-    AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, EvidenceStatus, LinkTarget, Severity,
+    AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, CorrectiveAction, EvidenceStatus, LinkTarget,
+    Severity,
 )
+from agents.audit.models.action import ACTION_ENTITY
+from agents.audit.workflow import NotAllowed
 from agents.audit.permissions import AuditRole, has_permission
 from agents.audit.services.case_service import (
     CaseClosed, ManagerApprovalRequired, ReasonRequired, _hospital_today, _hospital_year, _now,
@@ -31,6 +36,7 @@ FINDING_ENTITY = "audit_finding"
 FINDING_PREFIX = "FND"
 CONFIRM_PERMISSION = "finding:confirm"      # Audit Manager only
 DISMISS_PERMISSION = "finding:dismiss"      # Audit Manager only
+CLOSE_PERMISSION = "action:verify"          # the audit team (Auditor, Audit Manager)
 EDITABLE_FIELDS = frozenset({
     "title", "condition", "criteria", "cause", "effect", "recommendation", "financial_impact",
     "risk_level", "owner_user_id", "owner_department_id", "due_date", "previous_finding_id",
@@ -204,6 +210,27 @@ def dismiss_finding(db: Session, finding: AuditFinding, actor_id: uuid.UUID, act
     finding.updated_by = actor_id
     db.flush()
     _log(db, finding, actor_id, "finding.dismissed", reason=reason)
+    return finding
+
+
+def close_finding(db: Session, finding: AuditFinding, actor_id: uuid.UUID | None,
+                  actor_roles: Iterable[str]) -> AuditFinding:
+    """VERIFIED -> CLOSED (audit team only). Its verified corrective actions are closed with it."""
+    ensure_transition(finding.status, FindingStatus.CLOSED)
+    if not has_permission(actor_roles, CLOSE_PERMISSION):
+        raise NotAllowed("Only the audit team can close a finding")
+    now = _now()
+    actions = db.scalars(select(CorrectiveAction).where(
+        CorrectiveAction.finding_id == finding.id, CorrectiveAction.is_deleted.is_(False))).all()
+    for action in actions:
+        ensure_action_transition(action.status, ActionStatus.CLOSED)
+        action.status, action.closed_at, action.updated_by = ActionStatus.CLOSED.value, now, actor_id
+        log_action(db, action.tenant_id, actor_id, "action.closed", ACTION_ENTITY, action.id,
+                   {"finding_id": str(finding.id)})
+    finding.status = FindingStatus.CLOSED.value
+    finding.updated_by = actor_id
+    db.flush()
+    _log(db, finding, actor_id, "finding.closed", actions_closed=len(actions))
     return finding
 
 

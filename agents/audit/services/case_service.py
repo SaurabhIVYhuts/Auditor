@@ -13,10 +13,11 @@ from sqlalchemy.orm import Session
 
 from agents.audit.cases.numbering import next_case_number
 from agents.audit.cases.state_machine import OPEN_STATUSES, CaseStatus, ensure_transition
+from agents.audit.actions.state_machine import OPEN_STATUSES as ACTION_OPEN_STATUSES
 from agents.audit.findings.state_machine import OPEN_STATUSES as FINDING_OPEN_STATUSES
 from agents.audit.models import (
     AuditCase, AuditCaseComment, AuditCaseException, AuditException, AuditFinding, CaseDomain, CaseSource,
-    ExceptionStatus, Severity,
+    CorrectiveAction, ExceptionStatus, Severity,
 )
 from agents.audit.permissions import AuditRole, has_permission
 from shared.audit_log import AuditLog, list_for_entity, log_action
@@ -137,6 +138,21 @@ def assign_case(db: Session, case: AuditCase, assignee_id: uuid.UUID, actor_id: 
     return case
 
 
+def _ensure_nothing_open(db: Session, case: AuditCase) -> None:
+    """Refuse to close while findings or corrective actions of the case still need work."""
+    findings = db.scalar(select(func.count()).select_from(AuditFinding).where(
+        AuditFinding.case_id == case.id, AuditFinding.is_deleted.is_(False),
+        AuditFinding.status.in_(sorted(FINDING_OPEN_STATUSES)),
+    ))
+    actions = db.scalar(select(func.count()).select_from(CorrectiveAction).where(
+        CorrectiveAction.case_id == case.id, CorrectiveAction.is_deleted.is_(False),
+        CorrectiveAction.status.in_(sorted(ACTION_OPEN_STATUSES)),
+    ))
+    parts = [f"{n} {word}{'s' if n != 1 else ''}" for n, word in ((findings, "finding"), (actions, "action")) if n]
+    if parts:
+        raise FindingsStillOpen(f"{' / '.join(parts)} still open")
+
+
 def change_status(
     db: Session, case: AuditCase, target: str, actor_id: uuid.UUID | None,
     actor_roles: Iterable[str], reason: str | None = None,
@@ -157,13 +173,7 @@ def change_status(
     if target == CaseStatus.CLOSED:
         if case.priority in NEEDS_MANAGER_TO_CLOSE and not is_manager:
             raise ManagerApprovalRequired("Only an Audit Manager can close a HIGH or CRITICAL case")
-        # Step 25 adds corrective actions to this check.
-        still_open = db.scalar(select(func.count()).select_from(AuditFinding).where(
-            AuditFinding.case_id == case.id, AuditFinding.is_deleted.is_(False),
-            AuditFinding.status.in_(sorted(FINDING_OPEN_STATUSES)),
-        ))
-        if still_open:
-            raise FindingsStillOpen(f"{still_open} finding{'s' if still_open != 1 else ''} still open")
+        _ensure_nothing_open(db, case)
         case.closed_at = _now()
     if target == CaseStatus.REOPENED:
         case.closed_at = None
