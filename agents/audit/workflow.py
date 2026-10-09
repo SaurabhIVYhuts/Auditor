@@ -8,12 +8,16 @@ from enum import StrEnum
 
 
 class InvalidTransition(Exception):
-    """A record was asked to move to a status that may not follow its current one."""
+    """A record was asked to move to a status that may not follow its current one.
 
-    def __init__(self, current: str, target: str):
+    `allowed` lists the statuses that may follow (for error messages and buttons).
+    """
+
+    def __init__(self, current: str, target: str, allowed: list[str] | None = None):
         super().__init__(f"cannot move from {current} to {target}")
         self.current = current
         self.target = target
+        self.allowed = allowed or []
 
 
 class StateMachine:
@@ -38,4 +42,8 @@ class StateMachine:
     def ensure_transition(self, current: str, target: str) -> None:
         """Raise InvalidTransition unless the move is allowed."""
         if not self.can_transition(current, target):
-            raise InvalidTransition(current, target)
+            try:
+                allowed = [str(s) for s in self.allowed_next(current)]
+            except ValueError:
+                allowed = []                                  # unknown current status
+            raise InvalidTransition(current, target, allowed)

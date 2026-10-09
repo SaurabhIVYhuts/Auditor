@@ -62,6 +62,7 @@ AUDITEE = frozenset({
     "query:respond",             # answer queries in their own thread only
     "evidence:upload_own",       # upload evidence to their own query/action only
     "finding:respond",           # management response on a confirmed finding
+    "finding:read_own",          # their own confirmed findings only (not drafts, not other people's)
     "action:read_own", "action:submit",
 })
 

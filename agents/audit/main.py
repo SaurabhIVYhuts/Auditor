@@ -3,6 +3,7 @@ from fastapi import FastAPI
 
 from agents.audit.api.cases import router as cases_router
 from agents.audit.api.evidence import router as evidence_router
+from agents.audit.api.findings import router as findings_router
 from agents.audit.api.health import router as health_router
 from agents.audit.api.me import router as me_router
 from agents.audit.api.notifications import router as notifications_router
@@ -20,6 +21,7 @@ def create_app() -> FastAPI:
     app.include_router(rules_router, prefix=settings.api_prefix)
     app.include_router(cases_router, prefix=settings.api_prefix)
     app.include_router(evidence_router, prefix=settings.api_prefix)
+    app.include_router(findings_router, prefix=settings.api_prefix)
     app.include_router(notifications_router, prefix=settings.api_prefix)
     return app
 

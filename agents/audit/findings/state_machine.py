@@ -37,8 +37,13 @@ TRANSITIONS: dict[FindingStatus, frozenset[FindingStatus]] = {
     FindingStatus.CLOSED: frozenset(),
 }
 
-# Findings that still need work (used later: a case cannot close while any of these remain).
+# Findings that still need work (a case cannot close while any of these remain).
 OPEN_STATUSES: frozenset[FindingStatus] = frozenset(FindingStatus) - {FindingStatus.DISMISSED, FindingStatus.CLOSED}
+
+# Confirmed by an Audit Manager (and everything after). Drafts, findings under review and
+# dismissed findings are not part of this; management and owners only see these.
+CONFIRMED_STATUSES: frozenset[FindingStatus] = frozenset(FindingStatus) - {
+    FindingStatus.DRAFT, FindingStatus.UNDER_REVIEW, FindingStatus.DISMISSED}
 
 _MACHINE = StateMachine(FindingStatus, TRANSITIONS)
 can_transition = _MACHINE.can_transition

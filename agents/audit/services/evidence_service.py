@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from agents.audit.findings.state_machine import FindingStatus
+from agents.audit.findings.state_machine import CONFIRMED_STATUSES
 from agents.audit.models import (
     AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, AuditSourceRecord, EvidenceSource,
     EvidenceStatus, EvidenceType, LinkTarget,
@@ -178,19 +178,14 @@ def verify_evidence(db: Session, evidence: AuditEvidence, actor_id: uuid.UUID | 
     return intact
 
 
-# A finding in any of these statuses is still being written or reviewed (or was dismissed);
-# evidence behind every other finding status is what a confirmed finding rests on.
-UNCONFIRMED_FINDING_STATUSES = frozenset({FindingStatus.DRAFT.value, FindingStatus.UNDER_REVIEW.value,
-                                          FindingStatus.DISMISSED.value})
-
-
 def _supports_confirmed_finding(db: Session, evidence: AuditEvidence) -> bool:
+    """True if a confirmed finding (CONFIRMED or later) rests on this evidence."""
     return db.scalar(
         select(AuditFinding.id)
         .join(AuditEvidenceLink, AuditEvidenceLink.target_id == AuditFinding.id)
         .where(AuditEvidenceLink.evidence_id == evidence.id,
                AuditEvidenceLink.target_type == LinkTarget.FINDING.value,
-               AuditFinding.status.not_in(sorted(UNCONFIRMED_FINDING_STATUSES)))
+               AuditFinding.status.in_(sorted(CONFIRMED_STATUSES)))
         .limit(1)
     ) is not None
 
