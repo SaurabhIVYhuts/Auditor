@@ -48,3 +48,4 @@ _MACHINE = StateMachine(CaseStatus, TRANSITIONS)
 can_transition = _MACHINE.can_transition        # may a case in `current` move to `target`?
 allowed_next = _MACHINE.allowed_next            # statuses a case may move to next, stable order
 ensure_transition = _MACHINE.ensure_transition  # raises InvalidTransition unless allowed
+path = _MACHINE.path                            # shortest list of moves from current to target (or None)

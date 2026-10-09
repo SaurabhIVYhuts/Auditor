@@ -94,10 +94,27 @@ After the Phase 2 demo:
 4. Try the actions: move the status forward, add a comment, and watch the timeline. Closing a HIGH/CRITICAL case needs **AM**.
 5. Switch to role **AUD**: only the 2 cases assigned to you are visible.
 
+## Phase 4 demo (development only)
+
+After the Phase 3 demo. The sidebar has a **Dev user** picker: Priya (auditor), Rahul (audit manager) and Sunita (department owner). Pick the user and the matching role together.
+
+1. `.venv\Scripts\python -m scripts.run_phase4_demo`: the PO-DEMO-1 case (PRC-APR-01) goes through the whole loop to CLOSED as a finished example, and the INV-DEMO-5 case (PRC-INVPO-01) gets a finding from Priya that is SUBMITTED and waiting for review. Safe to run again.
+2. Start the backend and the frontend. Choose **Rahul** + **AM**, open **Findings**, and open the finding that is UNDER REVIEW.
+3. **Confirm** it with Sunita as owner and a due date. Then, under **Corrective actions**, add an action for Sunita.
+4. Switch to **Sunita** + **OWN** and open **My Actions**. Open the action, click **Start**, upload a file under **Evidence**, then **Submit for verification**.
+5. Switch to **Priya** + **AUD**. Open the action (Findings → the finding → the action), click **Verify**, then on the finding click **Close finding**.
+6. Compare with the finished example (the PO-DEMO-1 case): every step is in the case, finding and action timelines.
+
 ## Known gaps
 
 - Role notifications (for example "critical case opened" for all Audit Managers) are one shared row: when one manager marks it read, it is read for every manager.
-- Closing a case does not yet check for open findings or corrective actions (comes in Phase 4).
+- The Document Service is a local placeholder: files are written to disk before the database commit, so a rolled-back upload leaves an orphan file.
+- No action deadline extension or risk acceptance yet (P1).
+- No evidence pack ZIP export yet (P1).
+- No AI drafting of findings yet (Phase 5).
+- The daily job (`scripts.run_daily_jobs`: batch rules + action reminders) exists but is not scheduled yet.
+- Once a finding is RESOLVED (every action handed in), no new action can be added to it.
+- A case does not change status by itself when its findings and actions move; the auditor moves it.
 - Auditee queries and the AI case summary are P1 and not built yet.
 - Rule runs triggered by events or the nightly job are recorded in rule-run history but not in the audit log (only API actions are).
 
@@ -137,3 +154,14 @@ After the Phase 2 demo:
 - [x] Case queue and case workspace UI (AUD-022)
 - [x] In-app notifications: case assigned, critical case opened; notification bell (AUD-023)
 - [x] Exit check: exceptions become managed cases
+
+### Phase 4 — Findings, evidence and corrective actions
+
+- [x] Placeholder platform services: audit log, notifications, document store with SHA-256 (write once)
+- [x] Evidence: upload, system snapshots, links to case/finding/action, fingerprint check on every read, supersede with reason (AUD-030)
+- [x] Findings: state machine, structured fields, evidence before submit, maker-checker confirm by an Audit Manager, return, dismiss (AUD-031)
+- [x] Finding API with role-based visibility (owners see their own confirmed findings only)
+- [x] Corrective actions: owner starts, proves and submits; someone else verifies; the finding follows its actions; case close blocked while anything is open (AUD-032)
+- [x] Action reminders (due soon, overdue, escalation) and a daily job script; action API (AUD-032)
+- [x] Screens: dev user switcher, evidence tab, findings register and editor, My Actions, action page (AUD-033)
+- [x] Exit check: full human audit loop
