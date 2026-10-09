@@ -4,11 +4,13 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost, devUserId } from "@/lib/api";
 import { actionProblem } from "@/lib/apiErrors";
-import { type TimelineEntry, actorLabel, describeEntry } from "@/lib/caseTimeline";
+import { type TimelineEntry } from "@/lib/caseTimeline";
 import { label, personLabel, shortId } from "@/lib/format";
 import { useDevRole } from "@/components/DevRole";
+import { CaseFindings } from "@/components/CaseFindings";
 import { EvidenceSection } from "@/components/EvidenceSection";
 import { CaseStatusBadge, SeverityBadge } from "@/components/RuleBadges";
+import { Timeline } from "@/components/Timeline";
 
 type CaseException = {
   id: string;
@@ -215,7 +217,9 @@ export default function CaseWorkspacePage() {
         </table>
       )}
 
-      <EvidenceSection caseId={detail.id} />
+      <CaseFindings caseId={detail.id} />
+
+      <EvidenceSection listPath={`/audit/cases/${detail.id}/evidence`} uploadPath={`/audit/cases/${detail.id}/evidence`} />
 
       <h3>Comments</h3>
       {comments.length === 0 && <p>No comments yet.</p>}
@@ -233,14 +237,7 @@ export default function CaseWorkspacePage() {
       <button disabled={busy || !comment.trim()} onClick={addComment} style={{ marginBottom: 16 }}>Add comment</button>
 
       <h3>Timeline</h3>
-      <ol style={{ paddingLeft: 20 }}>
-        {timeline.map((t, i) => (
-          <li key={i} style={{ marginBottom: 4 }}>
-            {describeEntry(t)}{" "}
-            <small style={{ opacity: 0.7 }}>— {actorLabel(t.actor_id)}, {new Date(t.created_at).toLocaleString()}</small>
-          </li>
-        ))}
-      </ol>
+      <Timeline entries={timeline} />
     </div>
   );
 }

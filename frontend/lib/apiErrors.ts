@@ -1,7 +1,7 @@
 import type { ApiError } from "@/lib/api";
 import { label } from "@/lib/format";
 
-type Info = { code?: string; message?: string; allowed_next?: string[] };
+type Info = { code?: string; message?: string; allowed_next?: string[]; missing?: string[] };
 
 /** The structured part of an error body ({code, message, allowed_next}), or {} if there is none. */
 export function errorInfo(error: ApiError): Info {

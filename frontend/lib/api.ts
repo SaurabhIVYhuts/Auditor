@@ -48,12 +48,20 @@ async function result<T>(res: Response): Promise<ApiResult<T>> {
     : { status: res.status, data: null, error: parsed as ApiError };
 }
 
-export async function apiPost<T>(path: string, role: string, body?: unknown): Promise<ApiResult<T>> {
+async function sendJson<T>(method: string, path: string, role: string, body?: unknown): Promise<ApiResult<T>> {
   return result<T>(await send(path, role, {
-    method: "POST",
+    method,
     headers: body === undefined ? {} : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   }));
+}
+
+export function apiPost<T>(path: string, role: string, body?: unknown): Promise<ApiResult<T>> {
+  return sendJson<T>("POST", path, role, body);
+}
+
+export function apiPut<T>(path: string, role: string, body: unknown): Promise<ApiResult<T>> {
+  return sendJson<T>("PUT", path, role, body);
 }
 
 /** Multipart upload (files). The browser sets the Content-Type with its boundary. */

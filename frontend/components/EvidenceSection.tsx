@@ -1,5 +1,6 @@
 "use client";
-// Evidence of one case: list, download, verify the fingerprint, upload, supersede.
+// Evidence of a case or a finding: list, download, verify the fingerprint, upload, supersede,
+// and (for a finding) link evidence that is already on its case.
 // The server decides what each role may do; this page only shows its answers.
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { apiDownload, apiGet, apiPost, apiUpload } from "@/lib/api";
@@ -46,9 +47,19 @@ function saveBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function EvidenceSection({ caseId }: { caseId: string }) {
+type Props = {
+  listPath: string;          // GET returning the evidence list...
+  listField?: string;        // ...or an object holding it in this field (e.g. a finding's "evidence")
+  uploadPath: string;        // POST multipart
+  linkListPath?: string;     // evidence that may be linked (e.g. the case's)...
+  linkPath?: string;         // ...POST {evidence_id} here to link it
+};
+
+export function EvidenceSection({ listPath, listField, uploadPath, linkListPath, linkPath }: Props) {
   const { role } = useDevRole();
   const [items, setItems] = useState<Evidence[] | null>(null);
+  const [linkable, setLinkable] = useState<Evidence[]>([]);
+  const [linkId, setLinkId] = useState("");
   const [loadProblem, setLoadProblem] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, RowNote>>({});
   const [snapshots, setSnapshots] = useState<Record<string, unknown>>({});   // opened snapshot rows
@@ -65,14 +76,21 @@ export function EvidenceSection({ caseId }: { caseId: string }) {
 
   const reload = useCallback(
     () =>
-      apiGet<Evidence[]>(`/audit/cases/${caseId}/evidence`, role)
-        .then((r) => {
-          setItems(r.data);
+      Promise.all([
+        apiGet<unknown>(listPath, role),
+        linkListPath ? apiGet<Evidence[]>(linkListPath, role) : Promise.resolve({ status: 200, data: [] }),
+      ])
+        .then(([r, other]) => {
+          const list = (listField ? (r.data as Record<string, Evidence[]> | null)?.[listField] : r.data) as
+            Evidence[] | null | undefined;
+          setItems(list ?? null);
+          const here = new Set((list ?? []).map((e) => e.id));
+          setLinkable((other.data ?? []).filter((e) => e.status === "ACTIVE" && !here.has(e.id)));
           setLoadProblem(r.status === 200 ? null
             : r.status === 403 ? "Your role cannot view evidence." : `Could not load evidence (HTTP ${r.status}).`);
         })
         .catch(() => setLoadProblem(UNREACHABLE)),
-    [caseId, role],
+    [listPath, listField, linkListPath, role],
   );
 
   useEffect(() => {
@@ -140,7 +158,7 @@ export function EvidenceSection({ caseId }: { caseId: string }) {
     form.append("contains_phi", String(containsPhi));
     setBusy(true);
     try {
-      const r = await apiUpload<Evidence>(`/audit/cases/${caseId}/evidence`, role, form);
+      const r = await apiUpload<Evidence>(uploadPath, role, form);
       if (r.status !== 201) {
         setUploadNote({ kind: "problem", text: actionProblem(r.status, r.error, NOT_FOUND) });
         return;
@@ -150,6 +168,22 @@ export function EvidenceSection({ caseId }: { caseId: string }) {
       setFile(null);
       setContainsPhi(false);
       setFormKey((k) => k + 1);
+      await reload();
+    } catch {
+      setUploadNote({ kind: "problem", text: UNREACHABLE });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function link() {
+    if (!linkPath || !linkId) return;
+    setBusy(true);
+    try {
+      const r = await apiPost(linkPath, role, { evidence_id: linkId });
+      setUploadNote(r.status === 200 ? { kind: "ok", text: "Evidence linked." }
+        : { kind: "problem", text: actionProblem(r.status, r.error, NOT_FOUND) });
+      if (r.status === 200) setLinkId("");
       await reload();
     } catch {
       setUploadNote({ kind: "problem", text: UNREACHABLE });
@@ -197,6 +231,18 @@ export function EvidenceSection({ caseId }: { caseId: string }) {
           </label>
           <button type="submit" disabled={busy || !title.trim() || !file}>Upload</button>
         </div>
+        {linkPath && (
+          <div style={{ marginTop: 8 }}>
+            <label>
+              Link case evidence:{" "}
+              <select value={linkId} onChange={(ev) => setLinkId(ev.target.value)}>
+                <option value="">{linkable.length ? "Choose..." : "Nothing else on the case"}</option>
+                {linkable.map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
+              </select>
+            </label>{" "}
+            <button type="button" disabled={busy || !linkId} onClick={link}>Link</button>
+          </div>
+        )}
         {uploadNote && (
           <p role="status" style={{ color: uploadNote.kind === "ok" ? "#2e7d32" : problemColour, marginBottom: 0 }}>
             {uploadNote.text}

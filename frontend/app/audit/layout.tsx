@@ -8,7 +8,7 @@ const NAV: { label: string; href?: string }[] = [
   { label: "Procurement trail", href: "/audit/trail" },
   { label: "Cases", href: "/audit/cases" },
   { label: "Rules", href: "/audit/rules" },
-  { label: "Findings" },
+  { label: "Findings", href: "/audit/findings" },
   { label: "Reports" },
 ];
 
