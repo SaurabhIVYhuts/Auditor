@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { DEV_USER_ID, apiGet } from "@/lib/api";
+import { apiGet, devUserId } from "@/lib/api";
 import { label, personLabel } from "@/lib/format";
 import { useDevRole } from "@/components/DevRole";
 import { CaseStatusBadge, SeverityBadge } from "@/components/RuleBadges";
@@ -67,7 +67,7 @@ export default function CasesPage() {
     if (priority) params.set("priority", priority);
     if (domain) params.set("domain", domain);
     if (openOnly) params.set("open_only", "true");
-    if (mine) params.set("assigned_to", DEV_USER_ID);
+    if (mine) params.set("assigned_to", devUserId());
     apiGet<Case[]>(`/audit/cases?${params}`, role)
       .then((r) =>
         setLoad(

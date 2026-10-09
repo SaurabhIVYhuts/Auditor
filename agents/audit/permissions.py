@@ -61,6 +61,7 @@ COMPLIANCE_OFFICER = frozenset({
 AUDITEE = frozenset({
     "query:respond",             # answer queries in their own thread only
     "evidence:upload_own",       # upload evidence to their own query/action only
+    "evidence:read_own",         # view/download evidence of their own actions only
     "finding:respond",           # management response on a confirmed finding
     "finding:read_own",          # their own confirmed findings only (not drafts, not other people's)
     "action:read_own", "action:work",  # see, start and submit their own corrective actions

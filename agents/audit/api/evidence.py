@@ -2,7 +2,8 @@
 
 Visibility: a user may see an evidence item only if it is linked to a case, a finding OR a
 corrective action they can see (case_visibility / finding_visibility / action_visibility - the
-same rules as those APIs; so an action owner sees their own action's evidence).
+same rules as those APIs). With only evidence:read_own (auditees) just the action route counts:
+an action owner sees their own action's evidence and nothing else.
 Otherwise 404. Errors go through api.errors.run_action: an integrity failure is COMMITTED first
 (the alert and its log entry are kept); every other error rolls back.
 """
@@ -20,6 +21,7 @@ from agents.audit.api.visibility import action_visibility, finding_visibility
 from agents.audit.models import (
     AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, CorrectiveAction, EvidenceType, LinkTarget,
 )
+from agents.audit.permissions import has_permission
 from agents.audit.schemas.case import EvidenceOut, SupersedeIn
 from agents.audit.services.evidence_service import (
     evidence_for, link_evidence, read_evidence, supersede_evidence, upload_evidence, verify_evidence,
@@ -56,9 +58,10 @@ def _visible_evidence(db: Session, user: CurrentUser, evidence_id: uuid.UUID) ->
         .where(action_link.evidence_id == AuditEvidence.id, action_link.target_type == LinkTarget.ACTION.value,
                action_visibility(user))
     )
+    routes = [via_case, via_finding, via_action] if has_permission(user.roles, "evidence:read") else [via_action]
     evidence = db.scalar(select(AuditEvidence).where(
         AuditEvidence.id == evidence_id, AuditEvidence.tenant_id == user.tenant_id,
-        AuditEvidence.is_deleted.is_(False), or_(via_case, via_finding, via_action),
+        AuditEvidence.is_deleted.is_(False), or_(*routes),
     ))
     if evidence is None:
         raise HTTPException(404, detail="Evidence not found")
@@ -117,14 +120,17 @@ def upload_case_evidence(
     return upload_and_link(db, user, file, title, evidence_type, contains_phi, [(LinkTarget.CASE.value, case.id)])
 
 
+READ = ("evidence:read", "evidence:read_own")      # read_own: _visible_evidence limits it to own actions
+
+
 @router.get("/evidence/{evidence_id}", response_model=EvidenceOut)
-def get_evidence(evidence_id: uuid.UUID, user: CurrentUser = Depends(require_permission("evidence:read")),
+def get_evidence(evidence_id: uuid.UUID, user: CurrentUser = Depends(require_permission(*READ)),
                  db: Session = Depends(get_db)):
     return evidence_out(db, _visible_evidence(db, user, evidence_id))
 
 
 @router.get("/evidence/{evidence_id}/download")
-def download_evidence(evidence_id: uuid.UUID, user: CurrentUser = Depends(require_permission("evidence:read")),
+def download_evidence(evidence_id: uuid.UUID, user: CurrentUser = Depends(require_permission(*READ)),
                       db: Session = Depends(get_db)):
     evidence = _visible_evidence(db, user, evidence_id)
     content = run_action(db, lambda: read_evidence(db, evidence, user.user_id))   # re-checks the fingerprint

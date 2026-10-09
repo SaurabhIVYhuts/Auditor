@@ -108,3 +108,18 @@ def test_overdue_filter(db_session):
     db_session.get(CorrectiveAction, uuid.UUID(a["id"])).due_date = _hospital_today() - timedelta(days=2)
     db_session.commit()
     assert [x["id"] for x in call("GET", "/actions?overdue_only=true", "AUD", AUDITOR_A).json()] == [a["id"]]
+
+
+def test_auditee_reads_only_own_action_evidence(db_session):
+    _, f = confirmed_finding(db_session)                     # its evidence is on the auditee's own FINDING
+    finding_evidence = call("GET", f"/findings/{f['id']}", "AUD", AUDITOR_A).json()["evidence"][0]
+    mine, theirs = create(f["id"]).json(), create(f["id"], owner=SOMEONE_ELSE).json()
+    own = upload(mine["id"]).json()
+    other = upload(theirs["id"], roles="OWN", user=SOMEONE_ELSE).json()
+
+    assert call("GET", f"/evidence/{own['id']}", "OWN", OWNER).status_code == 200
+    download = call("GET", f"/evidence/{own['id']}/download", "OWN", OWNER)
+    assert (download.status_code, download.content) == (200, PDF)
+    for hidden in (other["id"], finding_evidence["id"]):
+        assert call("GET", f"/evidence/{hidden}", "OWN", OWNER).status_code == 404
+        assert call("GET", f"/evidence/{hidden}/download", "OWN", OWNER).status_code == 404

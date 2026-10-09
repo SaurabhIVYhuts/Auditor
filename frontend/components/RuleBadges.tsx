@@ -24,6 +24,11 @@ const CASE_STATUS_COLOURS: Record<string, string> = {
   REOPENED: "#e65100",
 };
 
+const EVIDENCE_STATUS_COLOURS: Record<string, string> = {
+  ACTIVE: "#2e7d32",
+  SUPERSEDED: "#9e9e9e",
+};
+
 const FALLBACK_COLOUR = "#616161";
 
 function Badge({ text, colour }: { text: string; colour: string }) {
@@ -54,4 +59,8 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function CaseStatusBadge({ status }: { status: string }) {
   return <Badge text={status.replaceAll("_", " ")} colour={CASE_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
+}
+
+export function EvidenceStatusBadge({ status }: { status: string }) {
+  return <Badge text={status} colour={EVIDENCE_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
 }
