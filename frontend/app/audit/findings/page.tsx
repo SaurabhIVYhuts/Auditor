@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet, devUserId } from "@/lib/api";
-import { personLabel, shortId } from "@/lib/format";
+import { personLabel } from "@/lib/format";
 import { FINDING_STATUSES, type Finding, RISK_LEVELS, isOverdue } from "@/lib/findings";
 import { useDevRole } from "@/components/DevRole";
 import { FilterSelect } from "@/components/FilterSelect";
@@ -10,7 +10,7 @@ import { FindingStatusBadge, SeverityBadge } from "@/components/RuleBadges";
 
 type Load =
   | { state: "loading" }
-  | { state: "ready"; findings: Finding[]; caseNumbers: Record<string, string> }
+  | { state: "ready"; findings: Finding[] }
   | { state: "error"; message: string };
 
 function errorMessage(status: number): string {
@@ -31,19 +31,11 @@ export default function FindingsPage() {
     if (status) params.set("status", status);
     if (risk) params.set("risk_level", risk);
     if (mine) params.set("owner_user_id", devUserId());
-    Promise.all([
-      apiGet<Finding[]>(`/audit/findings?${params}`, role),
-      // case numbers for the table; roles that cannot list cases see a short case id instead
-      apiGet<{ id: string; case_number: string }[]>("/audit/cases", role),
-    ])
-      .then(([r, cases]) =>
+    apiGet<Finding[]>(`/audit/findings?${params}`, role)
+      .then((r) =>
         setLoad(
           r.status === 200
-            ? {
-                state: "ready",
-                findings: r.data ?? [],
-                caseNumbers: Object.fromEntries((cases.data ?? []).map((c) => [c.id, c.case_number])),
-              }
+            ? { state: "ready", findings: r.data ?? [] }
             : { state: "error", message: errorMessage(r.status) },
         ),
       )
@@ -80,15 +72,12 @@ export default function FindingsPage() {
           </thead>
           <tbody>
             {load.findings.map((f) => {
-              const caseNumber = load.caseNumbers[f.case_id];
               const overdue = isOverdue(f);
               return (
                 <tr key={f.id} style={{ borderTop: "1px solid #ccc" }}>
                   <td><Link href={`/audit/findings/${f.id}`}>{f.finding_number}</Link></td>
                   <td>{f.title}</td>
-                  <td title={f.case_id}>
-                    {caseNumber ? <Link href={`/audit/cases/${f.case_id}`}>{caseNumber}</Link> : shortId(f.case_id)}
-                  </td>
+                  <td><Link href={`/audit/cases/${f.case_id}`}>{f.case_number}</Link></td>
                   <td>{f.risk_level ? <SeverityBadge severity={f.risk_level} /> : "-"}</td>
                   <td><FindingStatusBadge status={f.status} /></td>
                   <td title={f.owner_user_id ?? undefined}>{personLabel(f.owner_user_id)}</td>

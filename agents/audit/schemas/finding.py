@@ -38,6 +38,7 @@ class FindingOut(BaseModel):
     id: uuid.UUID
     finding_number: str
     case_id: uuid.UUID
+    case_number: str
     title: str
     condition: str | None
     criteria: str | None

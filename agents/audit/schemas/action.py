@@ -24,7 +24,9 @@ class ActionOut(BaseModel):
     id: uuid.UUID
     action_number: str
     finding_id: uuid.UUID
+    finding_number: str
     case_id: uuid.UUID
+    case_number: str
     description: str
     owner_user_id: uuid.UUID
     owner_department_id: uuid.UUID | None

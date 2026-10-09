@@ -27,7 +27,13 @@ function statusChange(d: Record<string, unknown>): string {
   return `Status ${label(text(d.from))} → ${label(text(d.to))}` + (d.reason ? `: ${d.reason}` : "");
 }
 
-/** One plain-language line for a case or finding audit-log entry. Unknown actions fall back to their code. */
+/** "due-3" -> "due in 3 days", "overdue", "escalated to management". */
+function reminderText(key: string): string {
+  if (key.startsWith("due-")) return `due in ${key.slice(4)} day${key === "due-1" ? "" : "s"}`;
+  return key === "escalated" ? "escalated to management" : key;
+}
+
+/** One plain-language line for a case, finding or action audit-log entry. Unknown actions fall back to their code. */
 export function describeEntry(entry: TimelineEntry): string {
   const d = entry.details ?? {};
   switch (entry.action) {
@@ -59,6 +65,20 @@ export function describeEntry(entry: TimelineEntry): string {
       return `Dismissed: ${String(d.reason ?? "")}`;
     case "finding.closed":
       return "Finding closed";
+    case "action.created":
+      return `Action created; owner ${personLabel(d.owner_user_id as string | null)}, due ${text(d.due_date)}`;
+    case "action.started":
+      return d.from === "RETURNED" ? "Work restarted" : "Work started";
+    case "action.submitted":
+      return "Submitted for verification";
+    case "action.verified":
+      return "Verified" + (d.note ? `: ${String(d.note)}` : "");
+    case "action.returned":
+      return `Returned for more work: ${String(d.note ?? "")}`;
+    case "action.closed":
+      return "Action closed";
+    case "action.reminder_sent":
+      return `Reminder sent (${reminderText(String(d.reminder ?? ""))})`;
     default:
       return entry.action;
   }

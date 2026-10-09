@@ -36,6 +36,15 @@ const FINDING_STATUS_COLOURS: Record<string, string> = {
   CLOSED: "#9e9e9e",
 };
 
+const ACTION_STATUS_COLOURS: Record<string, string> = {
+  OPEN: "#455a64",
+  IN_PROGRESS: "#1565c0",
+  SUBMITTED: "#6a1b9a",
+  RETURNED: "#e65100",
+  VERIFIED: "#2e7d32",
+  CLOSED: "#9e9e9e",
+};
+
 const EVIDENCE_STATUS_COLOURS: Record<string, string> = {
   ACTIVE: "#2e7d32",
   SUPERSEDED: "#9e9e9e",
@@ -79,4 +88,8 @@ export function EvidenceStatusBadge({ status }: { status: string }) {
 
 export function FindingStatusBadge({ status }: { status: string }) {
   return <Badge text={status.replaceAll("_", " ")} colour={FINDING_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
+}
+
+export function ActionStatusBadge({ status }: { status: string }) {
+  return <Badge text={status.replaceAll("_", " ")} colour={ACTION_STATUS_COLOURS[status] ?? FALLBACK_COLOUR} />;
 }

@@ -34,6 +34,7 @@ def test_auditee_sees_and_works_only_own_actions(db_session):
     mine = create(f["id"]).json()
     theirs = create(f["id"], owner=SOMEONE_ELSE).json()
     assert mine["action_number"].startswith("ACT-") and mine["allowed_next"] == ["IN_PROGRESS"]
+    assert (mine["finding_number"], mine["case_number"]) == (f["finding_number"], f["case_number"])
 
     listed = call("GET", "/actions", "OWN", OWNER).json()
     assert [a["id"] for a in listed] == [mine["id"]]
@@ -99,6 +100,8 @@ def test_full_loop_to_finding_closed(db_session):
     closed = call("POST", f"/findings/{f['id']}/close", "AUD", AUDITOR_A)
     assert (closed.status_code, closed.json()["status"]) == (200, "CLOSED"), closed.text
     assert call("GET", f"/actions/{a['id']}", "OWN", OWNER).json()["status"] == "CLOSED"
+    steps = [t["action"] for t in call("GET", f"/actions/{a['id']}/timeline", "OWN", OWNER).json()]
+    assert steps == ["action.created", "action.started", "action.submitted", "action.verified", "action.closed"]
 
 
 def test_overdue_filter(db_session):

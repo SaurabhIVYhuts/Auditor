@@ -1,0 +1,34 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+  font-family: system-ui, sans-serif;
+}
+
+.nav {
+  width: 220px;
+  padding: 16px;
+  border-right: 1px solid #ccc;
+}
+
+.main {
+  flex: 1;
+  padding: 24px;
+  min-width: 0;
+}
+
+/* Phones: the menu goes on top, the page gets the full width. */
+@media (max-width: 600px) {
+  .shell {
+    flex-direction: column;
+  }
+
+  .nav {
+    width: auto;
+    border-right: none;
+    border-bottom: 1px solid #ccc;
+  }
+
+  .main {
+    padding: 12px;
+  }
+}

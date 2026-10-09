@@ -1,4 +1,5 @@
-"""Corrective action API (module M12, AUD-032): create, list, detail, owner steps, verify, evidence.
+"""Corrective action API (module M12, AUD-032): create, list, detail, owner steps, verify, evidence,
+timeline.
 
 Who sees which action is decided by action_visibility() (api.visibility): the audit team sees
 actions of findings they can see; an auditee sees only their own. Hidden actions are 404.
@@ -16,9 +17,10 @@ from agents.audit.api.evidence import evidence_out, upload_and_link
 from agents.audit.api.findings import _visible_finding
 from agents.audit.api.visibility import visible_actions
 from agents.audit.models import CorrectiveAction, EvidenceType, LinkTarget
+from agents.audit.models.action import ACTION_ENTITY
 from agents.audit.permissions import has_permission
 from agents.audit.schemas.action import ActionCreate, ActionDetailOut, ActionOut, VerifyIn
-from agents.audit.schemas.case import EvidenceOut
+from agents.audit.schemas.case import EvidenceOut, TimelineEntryOut
 from agents.audit.schemas.finding import FindingOut, NoteIn
 from agents.audit.services.action_service import (
     WITH_OWNER_VALUES, create_action, return_action, start_action, submit_action, verify_action,
@@ -26,6 +28,7 @@ from agents.audit.services.action_service import (
 from agents.audit.services.case_service import _hospital_today
 from agents.audit.services.evidence_service import evidence_for
 from agents.audit.services.finding_service import close_finding
+from shared.audit_log import list_for_entity
 from shared.auth import CurrentUser
 from shared.db import get_db
 
@@ -73,6 +76,13 @@ def detail(action_id: uuid.UUID, user: CurrentUser = Depends(require_permission(
     evidence = evidence_for(db, user.tenant_id, LinkTarget.ACTION.value, action.id)
     return ActionDetailOut(**ActionOut.model_validate(action).model_dump(exclude={"allowed_next"}),
                            evidence=[evidence_out(db, e) for e in evidence])
+
+
+@router.get("/actions/{action_id}/timeline", response_model=list[TimelineEntryOut])
+def timeline(action_id: uuid.UUID, user: CurrentUser = Depends(require_permission(*READ)),
+             db: Session = Depends(get_db)):
+    action = _visible_action(db, user, action_id)
+    return list_for_entity(db, action.tenant_id, ACTION_ENTITY, action.id)
 
 
 @router.post("/actions/{action_id}/start", response_model=ActionOut)

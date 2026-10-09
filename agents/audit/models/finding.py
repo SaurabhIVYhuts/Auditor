@@ -9,15 +9,18 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    CheckConstraint, Date, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, text,
+    CheckConstraint, Date, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, select, text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from agents.audit.findings.state_machine import FindingStatus
 from agents.audit.models.base import AuditBase
+from agents.audit.models.case import AuditCase
 from agents.audit.models.rule import Severity, _allowed
 from shared.models import CommonColumns
+
+_case = AuditCase.__table__.alias("finding_case")
 
 
 class AuditFinding(CommonColumns, AuditBase):
@@ -34,6 +37,10 @@ class AuditFinding(CommonColumns, AuditBase):
 
     finding_number: Mapped[str] = mapped_column(String(20))      # e.g. FND-2026-00007
     case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("audit.audit_cases.id"))
+    # read-only, for screens: the case's number (loaded with the finding, not stored).
+    # An alias, so queries that already join audit_cases do not swallow the subquery.
+    case_number: Mapped[str] = column_property(
+        select(_case.c.case_number).where(_case.c.id == case_id).scalar_subquery())
     title: Mapped[str] = mapped_column(String(200))
     # The structured finding. May be incomplete while DRAFT; required before submit (finding service).
     condition: Mapped[str | None] = mapped_column(Text)          # what was found

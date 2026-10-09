@@ -3,30 +3,29 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DEV_USERS, apiGet, apiPost, apiPut, type ApiError } from "@/lib/api";
-import { actionProblem, errorInfo } from "@/lib/apiErrors";
+import { UNREACHABLE, actionProblem, errorInfo } from "@/lib/apiErrors";
 import { type TimelineEntry } from "@/lib/caseTimeline";
 import { type Finding, RISK_LEVELS, isOverdue } from "@/lib/findings";
 import { label, personLabel } from "@/lib/format";
+import { useStep } from "@/lib/useStep";
+import { ActionsSection } from "@/components/ActionsSection";
 import { useDevRole } from "@/components/DevRole";
 import { EvidenceSection } from "@/components/EvidenceSection";
 import { FindingStatusBadge, SeverityBadge } from "@/components/RuleBadges";
+import { StepNote } from "@/components/StepNote";
 import { Timeline } from "@/components/Timeline";
 
 type Load =
   | { state: "loading" }
-  | { state: "ready"; finding: Finding; timeline: TimelineEntry[]; caseNumber: string | null }
+  | { state: "ready"; finding: Finding; timeline: TimelineEntry[] }
   | { state: "error"; message: string };
 
-type Note = { kind: "ok" | "problem"; text: string } | null;
-
 const NOT_FOUND = "Finding not found or not visible to your role.";
-const UNREACHABLE = "API not reachable. Is the backend running?";
 const TEXT_FIELDS = ["condition", "criteria", "cause", "effect", "recommendation"] as const;
 const EDITABLE = [...TEXT_FIELDS, "risk_level", "financial_impact"] as const;
 type Field = (typeof EDITABLE)[number];
 
 const box = { border: "1px solid #ddd", borderRadius: 6, padding: 12, marginBottom: 16 } as const;
-const okColour = "#2e7d32";
 const problemColour = "#c62828";
 
 function loadError(status: number): string {
@@ -54,8 +53,6 @@ export default function FindingPage() {
   const { role } = useDevRole();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [version, setVersion] = useState(0);        // bumped on every reload: resets the editor
-  const [note, setNote] = useState<Note>(null);
-  const [busy, setBusy] = useState(false);
 
   const reload = useCallback(
     () =>
@@ -63,13 +60,12 @@ export default function FindingPage() {
         apiGet<Finding>(`/audit/findings/${id}`, role),
         apiGet<TimelineEntry[]>(`/audit/findings/${id}/timeline`, role),
       ])
-        .then(async ([f, timeline]) => {
+        .then(([f, timeline]) => {
           if (f.status !== 200 || !f.data) {
             setLoad({ state: "error", message: loadError(f.status) });
             return;
           }
-          const c = await apiGet<{ case_number: string }>(`/audit/cases/${f.data.case_id}`, role);
-          setLoad({ state: "ready", finding: f.data, timeline: timeline.data ?? [], caseNumber: c.data?.case_number ?? null });
+          setLoad({ state: "ready", finding: f.data, timeline: timeline.data ?? [] });
           setVersion((v) => v + 1);
         })
         .catch(() => setLoad({ state: "error", message: UNREACHABLE })),
@@ -80,23 +76,12 @@ export default function FindingPage() {
     reload();
   }, [reload]);
 
+  const { busy, note, run } = useStep(findingProblem, reload);
+
   /** Run one step (PUT or POST); returns true if it worked. */
-  async function act(method: "POST" | "PUT", path: string, body: unknown, success: string): Promise<boolean> {
-    setBusy(true);
-    setNote(null);
-    try {
-      const r = method === "POST" ? await apiPost(`/audit/findings/${id}${path}`, role, body)
-        : await apiPut(`/audit/findings/${id}`, role, body);
-      const ok = r.status === 200;
-      setNote(ok ? { kind: "ok", text: success } : { kind: "problem", text: findingProblem(r.status, r.error) });
-      if (ok) await reload();
-      return ok;
-    } catch {
-      setNote({ kind: "problem", text: UNREACHABLE });
-      return false;
-    } finally {
-      setBusy(false);
-    }
+  function act(method: "POST" | "PUT", path: string, body: unknown, success: string): Promise<boolean> {
+    return run(() => method === "POST" ? apiPost(`/audit/findings/${id}${path}`, role, body)
+      : apiPut(`/audit/findings/${id}`, role, body), success);
   }
 
   if (load.state !== "ready") {
@@ -107,14 +92,14 @@ export default function FindingPage() {
       </div>
     );
   }
-  const { finding: f, timeline, caseNumber } = load;
+  const { finding: f, timeline } = load;
 
   return (
     <div>
       <p>
         <Link href="/audit/findings">&larr; Back to findings</Link>
         {" · "}
-        <Link href={`/audit/cases/${f.case_id}`}>{caseNumber ? `Case ${caseNumber}` : "Open the case"}</Link>
+        <Link href={`/audit/cases/${f.case_id}`}>Case {f.case_number}</Link>
       </p>
       <h1 style={{ marginBottom: 4 }}>{f.finding_number}: {f.title}</h1>
       <p>
@@ -122,7 +107,7 @@ export default function FindingPage() {
       </p>
 
       <Review key={`review-${version}`} finding={f} busy={busy} act={act} />
-      {note && <p role="status" style={{ color: note.kind === "ok" ? okColour : problemColour }}>{note.text}</p>}
+      <StepNote note={note} />
 
       {(f.confirmed_at || f.dismiss_reason) && (
         <div style={box}>
@@ -162,10 +147,7 @@ export default function FindingPage() {
         linkPath={`/audit/findings/${f.id}/evidence-links`}
       />
 
-      <div style={box}>
-        <h3 style={{ marginTop: 0 }}>Corrective actions</h3>
-        <p style={{ marginBottom: 0, opacity: 0.7 }}>Corrective actions appear here (next step).</p>
-      </div>
+      <ActionsSection finding={f} onChanged={reload} />
 
       <h3>Timeline</h3>
       <Timeline entries={timeline} />

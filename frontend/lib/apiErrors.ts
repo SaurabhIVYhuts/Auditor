@@ -1,6 +1,8 @@
 import type { ApiError } from "@/lib/api";
 import { label } from "@/lib/format";
 
+export const UNREACHABLE = "API not reachable. Is the backend running?";
+
 type Info = { code?: string; message?: string; allowed_next?: string[]; missing?: string[] };
 
 /** The structured part of an error body ({code, message, allowed_next}), or {} if there is none. */

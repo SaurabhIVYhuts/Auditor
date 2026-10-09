@@ -1,9 +1,12 @@
+import { isPastDue } from "@/lib/format";
+
 // Shapes and helpers shared by the findings register, the case's findings list and the finding page.
 
 export type Finding = {
   id: string;
   finding_number: string;
   case_id: string;
+  case_number: string;
   title: string;
   condition: string | null;
   criteria: string | null;
@@ -30,14 +33,10 @@ export const FINDING_STATUSES = [
 ];
 export const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const FINISHED = new Set(["CLOSED", "DISMISSED"]);
-
-/** Today as YYYY-MM-DD in the browser's time zone (due dates are plain dates). */
-function today(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+// Corrective actions may be added while the finding is in one of these.
+export const TAKES_ACTIONS = new Set(["CONFIRMED", "ACTION_ASSIGNED", "REOPENED"]);
 
 /** Past its due date and not closed or dismissed. */
 export function isOverdue(f: Pick<Finding, "due_date" | "status">): boolean {
-  return !!f.due_date && f.due_date < today() && !FINISHED.has(f.status);
+  return isPastDue(f.due_date, f.status, FINISHED);
 }

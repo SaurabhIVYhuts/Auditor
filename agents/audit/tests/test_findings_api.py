@@ -68,6 +68,7 @@ def confirmed_finding(db, owner=OWNER, **fields):
 def test_full_api_path(db_session):
     c, f = new_finding(db_session)
     assert (f["status"], f["allowed_next"]) == ("DRAFT", ["UNDER_REVIEW"])
+    assert f["case_number"] == c.case_number
     evidence = add_evidence(f["id"])
     case_evidence = call("GET", f"/cases/{c.id}/evidence", "AUD", AUDITOR_A).json()
     assert evidence["id"] in [e["id"] for e in case_evidence]            # linked to the case too
