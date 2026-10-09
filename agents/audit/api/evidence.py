@@ -1,7 +1,8 @@
 """Evidence API (module M8): list, upload, view, download, verify and supersede evidence.
 
-Visibility: a user may see an evidence item only if it is linked to a case they can see OR to a
-finding they can see (case_visibility / finding_visibility - the same rules as those APIs).
+Visibility: a user may see an evidence item only if it is linked to a case, a finding OR a
+corrective action they can see (case_visibility / finding_visibility / action_visibility - the
+same rules as those APIs; so an action owner sees their own action's evidence).
 Otherwise 404. Errors go through api.errors.run_action: an integrity failure is COMMITTED first
 (the alert and its log entry are kept); every other error rolls back.
 """
@@ -15,9 +16,9 @@ from sqlalchemy.orm import Session, aliased
 from agents.audit.api.cases import _visible_case, case_visibility
 from agents.audit.api.deps import require_permission
 from agents.audit.api.errors import run_action
-from agents.audit.api.visibility import finding_visibility
+from agents.audit.api.visibility import action_visibility, finding_visibility
 from agents.audit.models import (
-    AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, EvidenceType, LinkTarget,
+    AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, CorrectiveAction, EvidenceType, LinkTarget,
 )
 from agents.audit.schemas.case import EvidenceOut, SupersedeIn
 from agents.audit.services.evidence_service import (
@@ -32,8 +33,8 @@ router = APIRouter(prefix="/audit", tags=["audit-evidence"])
 
 
 def _visible_evidence(db: Session, user: CurrentUser, evidence_id: uuid.UUID) -> AuditEvidence:
-    """The evidence item if it is linked to a case OR a finding this user may see; otherwise 404."""
-    case_link, finding_link = aliased(AuditEvidenceLink), aliased(AuditEvidenceLink)
+    """The evidence item if it is linked to a case, finding OR action this user may see; otherwise 404."""
+    case_link, finding_link, action_link = (aliased(AuditEvidenceLink) for _ in range(3))
     via_case = exists(
         select(case_link.id)
         .join(AuditCase, AuditCase.id == case_link.target_id)
@@ -47,9 +48,17 @@ def _visible_evidence(db: Session, user: CurrentUser, evidence_id: uuid.UUID) ->
         .where(finding_link.evidence_id == AuditEvidence.id, finding_link.target_type == LinkTarget.FINDING.value,
                finding_visibility(user))
     )
+    via_action = exists(
+        select(action_link.id)
+        .join(CorrectiveAction, CorrectiveAction.id == action_link.target_id)
+        .join(AuditFinding, AuditFinding.id == CorrectiveAction.finding_id)
+        .join(AuditCase, AuditCase.id == AuditFinding.case_id)
+        .where(action_link.evidence_id == AuditEvidence.id, action_link.target_type == LinkTarget.ACTION.value,
+               action_visibility(user))
+    )
     evidence = db.scalar(select(AuditEvidence).where(
         AuditEvidence.id == evidence_id, AuditEvidence.tenant_id == user.tenant_id,
-        AuditEvidence.is_deleted.is_(False), or_(via_case, via_finding),
+        AuditEvidence.is_deleted.is_(False), or_(via_case, via_finding, via_action),
     ))
     if evidence is None:
         raise HTTPException(404, detail="Evidence not found")

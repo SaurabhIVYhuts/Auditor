@@ -36,6 +36,8 @@ SUBMITTED_OR_LATER: frozenset[ActionStatus] = frozenset({ActionStatus.SUBMITTED,
 DONE_STATUSES: frozenset[ActionStatus] = frozenset({ActionStatus.VERIFIED, ActionStatus.CLOSED})
 # Actions that still need work (a case cannot close while any of these remain).
 OPEN_STATUSES: frozenset[ActionStatus] = frozenset(ActionStatus) - DONE_STATUSES
+# Actions waiting for the owner (reminders and "overdue" only apply to these).
+WITH_OWNER: frozenset[ActionStatus] = OPEN_STATUSES - SUBMITTED_OR_LATER
 
 _MACHINE = StateMachine(ActionStatus, TRANSITIONS)
 can_transition = _MACHINE.can_transition

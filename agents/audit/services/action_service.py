@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from agents.audit.actions.state_machine import (
-    DONE_STATUSES, SUBMITTED_OR_LATER, ActionStatus, ensure_transition,
+    DONE_STATUSES, SUBMITTED_OR_LATER, WITH_OWNER, ActionStatus, ensure_transition,
 )
 from agents.audit.cases.numbering import next_number
 from agents.audit.findings.state_machine import FindingStatus
@@ -26,7 +26,7 @@ from agents.audit.models.action import ACTION_ENTITY
 from agents.audit.permissions import AuditRole, has_permission
 from agents.audit.services.case_service import ManagerApprovalRequired, ReasonRequired, _hospital_today, _hospital_year, _now
 from agents.audit.services.finding_service import FINDING_ENTITY, EvidenceRequired, FieldsRequired
-from agents.audit.services.rule_registry import MakerCheckerError
+from agents.audit.services.rule_registry import ConfigMissingError, MakerCheckerError, get_config_value
 from agents.audit.workflow import NotAllowed
 from shared.audit_log import log_action
 from shared.notifications import notify_role, notify_user
@@ -37,6 +37,11 @@ VERIFY_PERMISSION = "action:verify"        # Auditor, Audit Manager
 MANAGER_PERMISSION = "finding:confirm"     # Audit Manager only
 FINDINGS_TAKING_ACTIONS = frozenset({FindingStatus.CONFIRMED.value, FindingStatus.ACTION_ASSIGNED.value,
                                      FindingStatus.REOPENED.value})
+WITH_OWNER_VALUES = sorted(s.value for s in WITH_OWNER)
+
+# Reminder timing per hospital (audit_config); used when a hospital has not set its own.
+REMINDER_DAYS_KEY, DEFAULT_REMINDER_DAYS = "action_reminder_days", [7, 3, 1]
+ESCALATION_DAYS_KEY, DEFAULT_ESCALATION_DAYS = "action_escalation_days", 30
 
 
 def _log(db: Session, action: CorrectiveAction, actor_id: uuid.UUID | None, event: str, **details) -> None:
@@ -208,3 +213,68 @@ def actions_for_finding(db: Session, finding: AuditFinding) -> list[CorrectiveAc
     return list(db.scalars(select(CorrectiveAction).where(
         CorrectiveAction.finding_id == finding.id, CorrectiveAction.is_deleted.is_(False),
     ).order_by(CorrectiveAction.created_at, CorrectiveAction.action_number)))
+
+
+def _config(db: Session, tenant_id: uuid.UUID, key: str, default):
+    try:
+        return get_config_value(db, tenant_id, key)
+    except ConfigMissingError:
+        return default
+
+
+def reminder_days(db: Session, tenant_id: uuid.UUID) -> list[int]:
+    """Days before the due date when the owner is reminded, smallest first (e.g. [1, 3, 7])."""
+    return sorted({int(d) for d in _config(db, tenant_id, REMINDER_DAYS_KEY, DEFAULT_REMINDER_DAYS)})
+
+
+def escalation_days(db: Session, tenant_id: uuid.UUID) -> int:
+    return int(_config(db, tenant_id, ESCALATION_DAYS_KEY, DEFAULT_ESCALATION_DAYS))
+
+
+def _remind(db: Session, action: CorrectiveAction, key: str, recipients: list[tuple[str, object]],
+            title: str) -> None:
+    """Send one reminder (to users and/or roles), record it in reminders_sent and the audit log."""
+    for kind, who in recipients:
+        notify = notify_user if kind == "user" else notify_role
+        notify(db, action.tenant_id, who, f"action.{key.split('-')[0]}", title, action.description,
+               ACTION_ENTITY, action.id)
+    action.reminders_sent = [*action.reminders_sent, key]      # new list so the change is saved
+    _log(db, action, None, "action.reminder_sent", reminder=key, due_date=str(action.due_date))
+
+
+def run_action_reminders(db: Session, tenant_id: uuid.UUID, today: date | None = None) -> dict[str, int]:
+    """Daily job: remind owners of actions still with them. Each reminder is sent once.
+
+    due within N days (each N of action_reminder_days) -> owner ("due-N", only the closest one);
+    past due -> owner + Audit Managers ("overdue"); more than action_escalation_days past due ->
+    Management ("escalated"). Running again on the same day sends nothing new.
+    """
+    today = today or _hospital_today()
+    days, escalate_after = reminder_days(db, tenant_id), escalation_days(db, tenant_id)
+    counts = {"due_soon": 0, "overdue": 0, "escalated": 0}
+    actions = db.scalars(select(CorrectiveAction).where(
+        CorrectiveAction.tenant_id == tenant_id, CorrectiveAction.is_deleted.is_(False),
+        CorrectiveAction.status.in_(WITH_OWNER_VALUES),
+    ).order_by(CorrectiveAction.due_date, CorrectiveAction.action_number))
+    for action in actions:
+        left = (action.due_date - today).days
+        owner = ("user", action.owner_user_id)
+        if left >= 0:
+            window = next((n for n in days if left <= n), None)     # the closest reminder that applies
+            key = f"due-{window}"
+            if window is not None and key not in action.reminders_sent:
+                when = "today" if left == 0 else f"in {left} day{'s' if left != 1 else ''}"
+                _remind(db, action, key, [owner], f"Corrective action {action.action_number} is due {when}")
+                counts["due_soon"] += 1
+            continue
+        late = -left
+        if "overdue" not in action.reminders_sent:
+            _remind(db, action, "overdue", [owner, ("role", AuditRole.AUDIT_MANAGER.value)],
+                    f"Corrective action {action.action_number} is past its due date ({action.due_date})")
+            counts["overdue"] += 1
+        if late > escalate_after and "escalated" not in action.reminders_sent:
+            _remind(db, action, "escalated", [("role", AuditRole.MANAGEMENT.value)],
+                    f"Corrective action {action.action_number} is {late} days past its due date")
+            counts["escalated"] += 1
+    db.flush()
+    return counts
