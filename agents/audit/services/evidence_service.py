@@ -7,21 +7,25 @@ evidence, documents and targets all belong to the same hospital. Flushes, never 
 """
 import hashlib
 import uuid
+from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agents.audit.findings.state_machine import FindingStatus
 from agents.audit.models import (
-    AuditCase, AuditEvidence, AuditEvidenceLink, AuditSourceRecord, EvidenceSource, EvidenceStatus,
-    EvidenceType, LinkTarget,
+    AuditCase, AuditEvidence, AuditEvidenceLink, AuditFinding, AuditSourceRecord, EvidenceSource,
+    EvidenceStatus, EvidenceType, LinkTarget,
 )
-from agents.audit.permissions import AuditRole
+from agents.audit.permissions import AuditRole, has_permission
+from agents.audit.services.case_service import ManagerApprovalRequired
 from agents.audit.services.snapshot_service import compute_checksum
 from shared.audit_log import log_action
 from shared.documents import read_document, store_document
 from shared.notifications import notify_role
 
 EVIDENCE_ENTITY = "audit_evidence"
+REVIEW_PERMISSION = "finding:confirm"          # held by the Audit Manager role only
 
 # Which snapshot field holds the human-readable number, per record type (for titles).
 NUMBER_FIELDS = {"purchase_order": "po_number", "grn": "grn_number", "invoice": "invoice_number",
@@ -86,13 +90,17 @@ def snapshot_evidence(
     return evidence
 
 
+TARGET_MODELS = {LinkTarget.CASE: AuditCase, LinkTarget.FINDING: AuditFinding}
+
+
 def _check_target(db: Session, tenant_id: uuid.UUID, target_type: str, target_id: uuid.UUID) -> None:
     target_type = LinkTarget(target_type)
-    if target_type != LinkTarget.CASE:
-        raise NotImplementedError("Findings and actions: tables arrive in Steps 24/25")
-    case = db.get(AuditCase, target_id)
-    if case is None or case.tenant_id != tenant_id or case.is_deleted:
-        raise ValueError("Case not found for this hospital")
+    model = TARGET_MODELS.get(target_type)
+    if model is None:
+        raise NotImplementedError("Corrective actions: the table arrives in Step 25")
+    target = db.get(model, target_id)
+    if target is None or target.tenant_id != tenant_id or target.is_deleted:
+        raise ValueError(f"{target_type.value.capitalize()} not found for this hospital")
 
 
 def link_evidence(
@@ -170,17 +178,38 @@ def verify_evidence(db: Session, evidence: AuditEvidence, actor_id: uuid.UUID | 
     return intact
 
 
+# A finding in any of these statuses is still being written or reviewed (or was dismissed);
+# evidence behind every other finding status is what a confirmed finding rests on.
+UNCONFIRMED_FINDING_STATUSES = frozenset({FindingStatus.DRAFT.value, FindingStatus.UNDER_REVIEW.value,
+                                          FindingStatus.DISMISSED.value})
+
+
+def _supports_confirmed_finding(db: Session, evidence: AuditEvidence) -> bool:
+    return db.scalar(
+        select(AuditFinding.id)
+        .join(AuditEvidenceLink, AuditEvidenceLink.target_id == AuditFinding.id)
+        .where(AuditEvidenceLink.evidence_id == evidence.id,
+               AuditEvidenceLink.target_type == LinkTarget.FINDING.value,
+               AuditFinding.status.not_in(sorted(UNCONFIRMED_FINDING_STATUSES)))
+        .limit(1)
+    ) is not None
+
+
 def supersede_evidence(
     db: Session, evidence: AuditEvidence, reason: str, actor_id: uuid.UUID | None,
-    replaced_by: AuditEvidence | None = None,
+    actor_roles: Iterable[str], replaced_by: AuditEvidence | None = None,
 ) -> AuditEvidence:
-    """Mark evidence SUPERSEDED (never deleted). A reason is required."""
-    # Step 24: superseding evidence on a CONFIRMED finding needs an Audit Manager.
+    """Mark evidence SUPERSEDED (never deleted). A reason is required.
+
+    Evidence behind a confirmed finding can only be superseded by an Audit Manager.
+    """
     reason = (reason or "").strip()
     if not reason:
         raise ValueError("A reason is required to supersede evidence")
     if evidence.status == EvidenceStatus.SUPERSEDED.value:
         raise ValueError("This evidence is already superseded")
+    if _supports_confirmed_finding(db, evidence) and not has_permission(actor_roles, REVIEW_PERMISSION):
+        raise ManagerApprovalRequired("Only an Audit Manager can supersede evidence of a confirmed finding")
     if replaced_by is not None:
         _same_hospital(replaced_by, evidence.tenant_id, "replacement evidence")
         if replaced_by.id == evidence.id or replaced_by.status != EvidenceStatus.ACTIVE.value:

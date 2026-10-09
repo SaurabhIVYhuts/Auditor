@@ -18,6 +18,7 @@ from agents.audit.api.cases import _visible_case, case_visibility
 from agents.audit.api.deps import require_permission
 from agents.audit.models import AuditCase, AuditEvidence, AuditEvidenceLink, EvidenceType, LinkTarget
 from agents.audit.schemas.case import EvidenceOut, SupersedeIn
+from agents.audit.services.case_service import ManagerApprovalRequired
 from agents.audit.services.evidence_service import (
     EvidenceIntegrityError, evidence_for, link_evidence, read_evidence, supersede_evidence, upload_evidence,
     verify_evidence,
@@ -71,6 +72,9 @@ def _run(db: Session, action: Callable[[], T]) -> T:
     except EvidenceIntegrityError as err:
         db.commit()                                    # the alert and its log entry must survive
         raise HTTPException(409, detail={"code": "INTEGRITY_FAILED", "message": str(err)}) from None
+    except ManagerApprovalRequired as err:
+        db.rollback()
+        raise HTTPException(403, detail={"code": "MANAGER_APPROVAL", "message": str(err)}) from None
     except NotImplementedError as err:
         db.rollback()
         raise HTTPException(422, detail={"message": str(err)}) from None
@@ -141,4 +145,5 @@ def supersede(evidence_id: uuid.UUID, body: SupersedeIn,
               user: CurrentUser = Depends(require_permission("evidence:supersede")), db: Session = Depends(get_db)):
     evidence = _visible_evidence(db, user, evidence_id)
     replacement = _visible_evidence(db, user, body.replaced_by) if body.replaced_by else None
-    return _out(db, _run(db, lambda: supersede_evidence(db, evidence, body.reason, user.user_id, replacement)))
+    return _out(db, _run(db, lambda: supersede_evidence(db, evidence, body.reason, user.user_id, user.roles,
+                                                        replacement)))

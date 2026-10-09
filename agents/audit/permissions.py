@@ -32,7 +32,7 @@ AUDITOR = frozenset({
     "evidence:write", "evidence:read", "evidence:verify", "evidence:supersede",
     "risk:read",
     "anomaly:read", "anomaly:feedback",
-    "finding:read", "finding:create", "finding:submit",
+    "finding:read", "finding:write",
     "action:read", "action:create", "action:verify",
     "report:read", "report:create",
     "dashboard:read",
@@ -66,7 +66,7 @@ AUDITEE = frozenset({
 })
 
 MANAGEMENT = frozenset({
-    "case:read", "case:read_high_risk", "evidence:read",
+    "case:read", "case:read_high_risk", "evidence:read", "finding:read",
     "dashboard:summary",
     "risk:department_read",
     "report:read",

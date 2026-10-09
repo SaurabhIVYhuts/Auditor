@@ -89,15 +89,15 @@ def test_other_hospitals_case_is_refused(db_session):
         link_evidence(db_session, evidence, "CASE", other_case.id, ACTOR)
 
 
-def test_findings_and_actions_are_not_ready_yet(db_session):
+def test_actions_are_not_ready_yet(db_session):
     evidence = upload(db_session)
     with pytest.raises(NotImplementedError):
-        link_evidence(db_session, evidence, "FINDING", uuid.uuid4(), ACTOR)
+        link_evidence(db_session, evidence, "ACTION", uuid.uuid4(), ACTOR)
 
 
 def test_superseded_evidence_cannot_be_linked(db_session):
     evidence = upload(db_session)
-    supersede_evidence(db_session, evidence, "Wrong file uploaded", ACTOR)
+    supersede_evidence(db_session, evidence, "Wrong file uploaded", ACTOR, ["AUD"])
     assert (evidence.status, evidence.superseded_reason) == ("SUPERSEDED", "Wrong file uploaded")
     with pytest.raises(ValueError):
         link_evidence(db_session, evidence, "CASE", a_case(db_session, evidence.tenant_id).id, ACTOR)
@@ -106,10 +106,10 @@ def test_superseded_evidence_cannot_be_linked(db_session):
 def test_supersede_needs_a_reason_and_records_the_replacement(db_session):
     old, new = upload(db_session), None
     with pytest.raises(ValueError):
-        supersede_evidence(db_session, old, "   ", ACTOR)
+        supersede_evidence(db_session, old, "   ", ACTOR, ["AUD"])
     new = upload_evidence(db_session, old.tenant_id, title="Corrected approval", filename="approval2.pdf",
                           content_type="application/pdf", data=PDF + b"2", actor_id=ACTOR)
-    supersede_evidence(db_session, old, "Corrected copy received", ACTOR, replaced_by=new)
+    supersede_evidence(db_session, old, "Corrected copy received", ACTOR, ["AUD"], replaced_by=new)
     assert old.superseded_by == new.id
 
 
